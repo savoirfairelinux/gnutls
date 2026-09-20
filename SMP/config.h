@@ -88,6 +88,9 @@
 /* enable heartbeat support */
 #define ENABLE_HEARTBEAT 1
 
+/* enable HPKE support */
+#define ENABLE_HPKE 1
+
 /* enable ktls support */
 /* #undef ENABLE_KTLS */
 

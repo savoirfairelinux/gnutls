@@ -482,7 +482,6 @@ gnutls_pk_get_name
 gnutls_pk_get_oid
 gnutls_pk_list
 gnutls_pk_to_sign
-gnutls_pkcs11_obj_get_pk_algorithm
 gnutls_pkcs12_bag_decrypt
 gnutls_pkcs12_bag_deinit
 gnutls_pkcs12_bag_enc_info
