@@ -29,7 +29,7 @@ jobs:
       - name: Initialize submodules
         shell: cmd
         run: |
-          git submodule init
+          git submodule init devel/libtasn1
           for /F "tokens=*" %%n IN ('git config submodule.devel/libtasn1.url') DO @(git clone -n --depth=1 %%n devel/libtasn1)
           git -C devel/libtasn1 config core.protectNTFS false
           git -C devel/libtasn1 config core.sparseCheckout true
@@ -37,7 +37,7 @@ jobs:
           echo !/tests/ >> devel\libtasn1\.git\info\sparse-checkout
           git submodule absorbgitdirs devel/libtasn1
           git -C devel/libtasn1 reset --hard
-          git submodule update --init --depth=1
+          git submodule update --init --depth=1 devel/libtasn1
 
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2

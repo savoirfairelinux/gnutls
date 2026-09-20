@@ -1538,7 +1538,7 @@
     <ClCompile Include="..\gnulib\lib\uninorm\decomposition.c">
       <Filter>Source Files\gnulib\uninorm</Filter>
     </ClCompile>
-    <ClCompile Include="..\gnulib\lib\hash-pjw-bare.c">
+    <ClCompile Include="..\gnulib\lib\hashcode-mem.c">
       <Filter>Source Files\gnulib</Filter>
     </ClCompile>
     <ClCompile Include="..\gnulib\lib\uninorm\decompose-internal.c">

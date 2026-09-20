@@ -158,6 +158,10 @@ extern int rpl_open(const char *filename, int flags, ...);
 # define O_TTY_INIT 0
 #endif
 
+#ifndef O_ACCMODE
+# define O_ACCMODE (O_RDONLY | O_WRONLY | O_RDWR)
+#endif
+
 #if !defined O_BINARY && defined _O_BINARY
 # define O_BINARY _O_BINARY
 # define O_TEXT _O_TEXT

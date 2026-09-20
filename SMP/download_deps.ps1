@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$TargetDir = "$PSScriptRoot\..\prebuilt",
+    [string]$TargetDir = "$PSScriptRoot\..\..\prebuilt",
     [int]$MsvcVer = 17,
     [string]$GitHubToken = $env:GITHUB_TOKEN
 )
@@ -10,9 +10,15 @@ $ErrorActionPreference = 'Stop'
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
 
 $TargetDir = [System.IO.Path]::GetFullPath($TargetDir)
-Write-Host "Prebuilt destination directory: $TargetDir"
+Write-Host "Prebuilt primary destination directory: $TargetDir"
 if (-not (Test-Path -Path $TargetDir)) {
     New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null
+}
+
+# Also mirror into <repo>\prebuilt ($PSScriptRoot\..\prebuilt) for tools/paths expecting it there
+$repoPrebuiltDir = [System.IO.Path]::GetFullPath("$PSScriptRoot\..\prebuilt")
+if ($repoPrebuiltDir -ne $TargetDir -and -not (Test-Path -Path $repoPrebuiltDir)) {
+    New-Item -ItemType Directory -Path $repoPrebuiltDir -Force | Out-Null
 }
 
 $deps = @('nettle', 'gmp', 'zlib')
@@ -65,14 +71,10 @@ foreach ($dep in $deps) {
     }
 }
 
-# Also ensure D:\prebuilt has a copy or symlink if needed (e.g. if $(ProjectDir)\..\..\prebuilt resolves to repo parent's parent)
-$altTargetDir = [System.IO.Path]::GetFullPath("$TargetDir\..\prebuilt")
-if ($altTargetDir -ne $TargetDir) {
-    Write-Host "Also mirroring prebuilt to $altTargetDir..."
-    if (-not (Test-Path $altTargetDir)) {
-        New-Item -ItemType Directory -Path $altTargetDir -Force | Out-Null
-    }
-    Copy-Item -Path "$TargetDir\*" -Destination $altTargetDir -Recurse -Force
+# Mirror to repoPrebuiltDir ($PSScriptRoot\..\prebuilt) if different
+if ($repoPrebuiltDir -ne $TargetDir) {
+    Write-Host "Mirroring prebuilt to $repoPrebuiltDir..."
+    Copy-Item -Path "$TargetDir\*" -Destination $repoPrebuiltDir -Recurse -Force
 }
 
 Write-Host "All dependencies downloaded and extracted successfully."

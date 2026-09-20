@@ -2180,6 +2180,8 @@ _GL_UNUSED_LABEL should be used with a trailing ;*/
 #define _GL_ATTRIBUTE_MALLOC
 #define _GL_ATTRIBUTE_ALLOC_SIZE(args)
 
+#define _GL_ATTRIBUTE_NONSTRING /* empty */
+
 # define _GL_ATTRIBUTE_DEALLOC(f, i)
 # define _GL_ATTRIBUTE_DEALLOC_FREE _GL_ATTRIBUTE_DEALLOC (free, 1)
 
@@ -2209,6 +2211,11 @@ _GL_UNUSED_LABEL should be used with a trailing ;*/
 #ifndef _Thread_local
 #define _Thread_local __declspec(thread)
 #endif
+#define CRAU_MAYBE_UNUSED /* empty */
+#endif
+
+#ifndef O_ACCMODE
+#define O_ACCMODE 0x0003
 #endif
 
 /* Define as `fork' if `vfork' does not work. */
