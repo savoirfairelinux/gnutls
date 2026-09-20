@@ -57,7 +57,14 @@ jobs:
       - name: Build libgnutls
         shell: cmd
         run: |
-          msbuild SMP\libgnutls.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /m /v:m
+          msbuild SMP\libgnutls.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /fl /flp:logfile=build.log;verbosity=normal /m /v:m
+
+      - name: Upload Build Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ matrix.platform }}-${{ matrix.configuration }}
+          path: build.log
 
       - name: Upload Artifacts
         if: matrix.configuration == 'Release' || matrix.configuration == 'ReleaseDLLStaticDeps'
