@@ -31,7 +31,6 @@ if (-not $vsInstallPath) {
 Write-Host "Found Visual Studio installation at: $vsInstallPath"
 
 # Find BuildCustomizations directory
-# Typically: <vsInstallPath>\MSBuild\Microsoft\VC\v170\BuildCustomizations
 $targets = Get-ChildItem -Path "$vsInstallPath\MSBuild\Microsoft\VC" -Recurse -Filter "BuildCustomizations" -Directory -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
 if (-not $targets) {
     $targets = @("$vsInstallPath\MSBuild\Microsoft\VC\v170\BuildCustomizations")
@@ -59,9 +58,12 @@ if ($vcToolsVersion -and (Test-Path "$vsInstallPath\VC\Tools\MSVC\$vcToolsVersio
     $vcToolsDirs += Get-ChildItem -Path "$vsInstallPath\VC\Tools\MSVC" -Directory | Select-Object -ExpandProperty FullName
 }
 
-# Copy yasm.exe (64-bit yasm as yasm.exe) to VC tools host bin folders and VC root
 $yasm64Exe = "$extractDir\yasm\yasm-64.exe"
 $yasm32Exe = "$extractDir\yasm\yasm-32.exe"
+
+# Copy yasm.exe directly to $(VCInstallDir) which is $vsInstallPath\VC
+Write-Host "Installing yasm.exe into VC root: $vsInstallPath\VC"
+Copy-Item -Path $yasm64Exe -Destination "$vsInstallPath\VC\yasm.exe" -Force -ErrorAction SilentlyContinue
 
 foreach ($toolDir in $vcToolsDirs) {
     Write-Host "Installing yasm.exe into: $toolDir"
@@ -69,11 +71,10 @@ foreach ($toolDir in $vcToolsDirs) {
     Copy-Item -Path $yasm64Exe -Destination "$toolDir\bin\Hostx64\x86\yasm.exe" -Force -ErrorAction SilentlyContinue
     Copy-Item -Path $yasm32Exe -Destination "$toolDir\bin\Hostx86\x86\yasm.exe" -Force -ErrorAction SilentlyContinue
     Copy-Item -Path $yasm32Exe -Destination "$toolDir\bin\Hostx86\x64\yasm.exe" -Force -ErrorAction SilentlyContinue
-    # Also in the root of MSVC tool dir for $(VCInstallDir)
     Copy-Item -Path $yasm64Exe -Destination "$toolDir\yasm.exe" -Force -ErrorAction SilentlyContinue
 }
 
-# Also copy into Windows System32 or add to PATH so yasm.exe is directly runnable
+# Also copy into Windows System32 and directory on PATH
 Copy-Item -Path $yasm64Exe -Destination "C:\Windows\System32\yasm.exe" -Force -ErrorAction SilentlyContinue
 
 Write-Host "VSYASM setup complete."
