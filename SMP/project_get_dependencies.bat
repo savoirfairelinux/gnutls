@@ -161,8 +161,11 @@ cd "%CURRDIR%"
 SET ERROR=1
 
 :exit
-REM Directly exit if an AppVeyor build
+REM Directly exit if a CI build
 IF NOT "%APPVEYOR%"=="" (
+    GOTO return
+)
+IF NOT "%CI%"=="" (
     GOTO return
 )
 REM Return the passed dependency list

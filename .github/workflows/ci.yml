@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, 'fix/**', 'ci/**' ]
     tags: [ '*' ]
   pull_request:
     branches: [ master ]
@@ -45,24 +45,19 @@ jobs:
       - name: Setup VSYASM
         shell: powershell
         run: |
-          (New-Object Net.WebClient).DownloadFile('https://github.com/ShiftMediaProject/VSYASM/releases/download/0.7/VSYASM.zip', "$pwd\yasm.zip")
-          Add-Type -A 'System.IO.Compression.FileSystem'
-          [IO.Compression.ZipFile]::ExtractToDirectory("$pwd\yasm.zip", "$pwd\TempYASMUnpack")
-          & ".\TempYASMUnpack\install_script.bat"
-          $vctargets = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\MSBuild\ToolsVersions\4.0").VCTargetsPath
-          if ($vctargets -and (Test-Path "$vctargets\BuildCustomizations")) {
-            Copy-Item -Force "TempYASMUnpack\*.*" "$vctargets\BuildCustomizations"
-          }
+          powershell -ExecutionPolicy Bypass -File SMP\setup_vsyasm.ps1
 
       - name: Fetch Dependencies
-        shell: cmd
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          call "%GITHUB_WORKSPACE%\SMP\project_get_dependencies.bat"
+          powershell -ExecutionPolicy Bypass -File SMP\download_deps.ps1
 
       - name: Build libgnutls
         shell: cmd
         run: |
-          msbuild SMP\libgnutls.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /p:OutDir=%GITHUB_WORKSPACE%\build_out\ /m /v:m
+          msbuild SMP\libgnutls.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /m /v:m
 
       - name: Upload Artifacts
         if: matrix.configuration == 'Release' || matrix.configuration == 'ReleaseDLLStaticDeps'
@@ -70,7 +65,7 @@ jobs:
         with:
           name: libgnutls-${{ matrix.platform }}-${{ matrix.configuration }}
           path: |
-            build_out/bin/
-            build_out/lib/
-            build_out/include/
+            msvc/bin/
+            msvc/lib/
+            msvc/include/
           if-no-files-found: ignore
