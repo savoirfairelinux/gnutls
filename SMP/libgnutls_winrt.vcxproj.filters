@@ -31,6 +31,15 @@
     <Filter Include="Source Files\lib\auth">
       <UniqueIdentifier>{37a0ca08-651d-420d-97c6-9c577325bdbd}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\lib\hpke">
+      <UniqueIdentifier>{6d2528c0-bc6d-4952-b13c-0e86b0daff1e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\lib\crau">
+      <UniqueIdentifier>{7d2528c0-bc6d-4952-b13c-0e86b0daff1f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\lib\hpke">
+      <UniqueIdentifier>{8d2528c0-bc6d-4952-b13c-0e86b0daff20}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Header Files\lib\auth">
       <UniqueIdentifier>{dea014de-cf7e-464e-aa39-96603d49a936}</UniqueIdentifier>
     </Filter>
@@ -140,6 +149,30 @@
     </ClInclude>
     <ClInclude Include="..\lib\includes\gnutls\x509.h">
       <Filter>Header Files\lib\includes\gnutls</Filter>
+    </ClInclude>
+    <ClInclude Include="..\lib\includes\gnutls\hpke.h">
+      <Filter>Header Files\include\gnutls</Filter>
+    </ClInclude>
+    <ClInclude Include="..\lib\audit.h">
+      <Filter>Header Files\lib</Filter>
+    </ClInclude>
+    <ClInclude Include="..\lib\hpke\hpke-builders.h">
+      <Filter>Header Files\lib\hpke</Filter>
+    </ClInclude>
+    <ClInclude Include="..\lib\hpke\hpke-hkdf.h">
+      <Filter>Header Files\lib\hpke</Filter>
+    </ClInclude>
+    <ClInclude Include="..\lib\hpke\hpke-key-management.h">
+      <Filter>Header Files\lib\hpke</Filter>
+    </ClInclude>
+    <ClInclude Include="..\lib\hpke\hpke-params.h">
+      <Filter>Header Files\lib\hpke</Filter>
+    </ClInclude>
+    <ClInclude Include="..\lib\crau\crau.h">
+      <Filter>Header Files\lib\crau</Filter>
+    </ClInclude>
+    <ClInclude Include="..\lib\crau\macros.h">
+      <Filter>Header Files\lib\crau</Filter>
     </ClInclude>
     <ClInclude Include="..\lib\includes\gnutls\abstract.h">
       <Filter>Header Files\lib\includes\gnutls</Filter>
@@ -585,9 +618,6 @@
     <ClInclude Include="..\lib\nettle\int\mpn-base256.h">
       <Filter>Header Files\lib\nettle\int</Filter>
     </ClInclude>
-    <ClInclude Include="..\lib\nettle\int\block8.h">
-      <Filter>Header Files\lib\nettle\int</Filter>
-    </ClInclude>
     <ClInclude Include="..\lib\accelerated\afalg.h">
       <Filter>Header Files\lib\accelerated</Filter>
     </ClInclude>
@@ -598,9 +628,6 @@
       <Filter>Header Files\lib\nettle\gost</Filter>
     </ClInclude>
     <ClInclude Include="..\lib\nettle\gost\kuznyechik.h">
-      <Filter>Header Files\lib\nettle\gost</Filter>
-    </ClInclude>
-    <ClInclude Include="..\lib\nettle\gost\hmac-gost.h">
       <Filter>Header Files\lib\nettle\gost</Filter>
     </ClInclude>
     <ClInclude Include="..\lib\nettle\gost\cmac.h">
@@ -617,12 +644,6 @@
     </ClInclude>
     <ClInclude Include="..\lib\pathbuf.h">
       <Filter>Header Files\lib</Filter>
-    </ClInclude>
-    <ClInclude Include="..\lib\nettle\int\rsa-oaep.h">
-      <Filter>Header Files\lib\nettle\int</Filter>
-    </ClInclude>
-    <ClInclude Include="..\lib\nettle\int\sha3-shake.h">
-      <Filter>Header Files\lib\nettle\int</Filter>
     </ClInclude>
     <ClInclude Include="..\lib\dlwrap\zlibfuncs.h">
       <Filter>Header Files\lib\dlwrap</Filter>
@@ -916,6 +937,27 @@
     </ClCompile>
     <ClCompile Include="..\lib\auth\srp_kx.c">
       <Filter>Source Files\lib\auth</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\audit.c">
+      <Filter>Source Files\lib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\hpke\hpke-api.c">
+      <Filter>Source Files\lib\hpke</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\hpke\hpke-builders.c">
+      <Filter>Source Files\lib\hpke</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\hpke\hpke-hkdf.c">
+      <Filter>Source Files\lib\hpke</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\hpke\hpke-key-management.c">
+      <Filter>Source Files\lib\hpke</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\hpke\hpke-params.c">
+      <Filter>Source Files\lib\hpke</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\hpke\hpke.c">
+      <Filter>Source Files\lib\hpke</Filter>
     </ClCompile>
     <ClCompile Include="..\lib\alert.c">
       <Filter>Source Files\lib</Filter>
@@ -1569,9 +1611,6 @@
       <Filter>Source Files\lib\nettle\gost</Filter>
     </ClCompile>
     <ClCompile Include="..\lib\nettle\gost\cmac-magma.c">
-      <Filter>Source Files\lib\nettle\gost</Filter>
-    </ClCompile>
-    <ClCompile Include="..\lib\nettle\gost\hmac-streebog.c">
       <Filter>Source Files\lib\nettle\gost</Filter>
     </ClCompile>
     <ClCompile Include="..\lib\nettle\gost\kuznyechik.c">
