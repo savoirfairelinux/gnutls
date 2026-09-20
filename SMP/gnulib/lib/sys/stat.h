@@ -263,6 +263,9 @@ extern int rpl_stat(const char *restrict name, struct stat *restrict buf);
 #undef _stat
 #define _stat rpl_stat
 #define stat(name, buf) rpl_stat(name, buf)
+#ifndef lstat
+#define lstat stat
+#endif
 
 // Missing helper function for UWp compat
 #include <winapifamily.h>

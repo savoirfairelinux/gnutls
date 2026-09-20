@@ -57,6 +57,9 @@ extern int rpl_strverscmp(const char *s1, const char *s2);
 extern void rpl_explicit_bzero(void *s, size_t len);
 #define explicit_bzero rpl_explicit_bzero
 
+static __inline int streq(const char *s1, const char *s2) { return strcmp(s1, s2) == 0; }
+static __inline char *strnul(const char *s) { return (char *)(s + strlen(s)); }
+
 __inline void mbszero (mbstate_t *ps) { memset (ps, 0, sizeof(mbstate_t)); }
 
 #endif /* _MSC_VER */

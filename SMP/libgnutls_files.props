@@ -211,9 +211,13 @@
     <ClCompile Include="..\gnulib\lib\getdtablesize.c" />
     <ClCompile Include="..\gnulib\lib\gettimeofday.c" />
     <ClCompile Include="..\gnulib\lib\getline.c" />
+    <ClCompile Include="..\gnulib\lib\gl_list.c" />
+    <ClCompile Include="..\gnulib\lib\gl_array_list.c" />
+    <ClCompile Include="..\gnulib\lib\gl_rbtree_list.c" />
     <ClCompile Include="..\gnulib\lib\gl_linkedhash_list.c" />
     <ClCompile Include="..\gnulib\lib\hashcode-mem.c" />
     <ClCompile Include="..\gnulib\lib\hash.c" />
+    <ClCompile Include="..\gnulib\lib\next-prime.c" />
     <ClCompile Include="..\gnulib\lib\lseek.c" />
     <ClCompile Include="..\gnulib\lib\memmem.c" />
     <ClCompile Include="..\gnulib\lib\memset_explicit.c" />

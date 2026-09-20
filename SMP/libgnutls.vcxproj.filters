@@ -1541,6 +1541,18 @@
     <ClCompile Include="..\gnulib\lib\hashcode-mem.c">
       <Filter>Source Files\gnulib</Filter>
     </ClCompile>
+    <ClCompile Include="..\gnulib\lib\gl_list.c">
+      <Filter>Source Files\gnulib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\gnulib\lib\gl_array_list.c">
+      <Filter>Source Files\gnulib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\gnulib\lib\gl_rbtree_list.c">
+      <Filter>Source Files\gnulib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\gnulib\lib\next-prime.c">
+      <Filter>Source Files\gnulib</Filter>
+    </ClCompile>
     <ClCompile Include="..\gnulib\lib\uninorm\decompose-internal.c">
       <Filter>Source Files\gnulib\uninorm</Filter>
     </ClCompile>

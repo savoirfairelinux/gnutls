@@ -2221,6 +2221,10 @@ _GL_UNUSED_LABEL should be used with a trailing ;*/
 #define O_ACCMODE 0x0003
 #endif
 
+#ifndef lstat
+#define lstat stat
+#endif
+
 /* Define as `fork' if `vfork' does not work. */
 /* #undef vfork */
 
