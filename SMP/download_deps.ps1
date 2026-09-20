@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$TargetDir = "$PSScriptRoot\..\..\prebuilt",
+    [string]$TargetDir = "$PSScriptRoot\..\prebuilt",
     [int]$MsvcVer = 17,
     [string]$GitHubToken = $env:GITHUB_TOKEN
 )
@@ -63,6 +63,16 @@ foreach ($dep in $deps) {
             Remove-Item -Path $tempZip -Force
         }
     }
+}
+
+# Also ensure D:\prebuilt has a copy or symlink if needed (e.g. if $(ProjectDir)\..\..\prebuilt resolves to repo parent's parent)
+$altTargetDir = [System.IO.Path]::GetFullPath("$TargetDir\..\prebuilt")
+if ($altTargetDir -ne $TargetDir) {
+    Write-Host "Also mirroring prebuilt to $altTargetDir..."
+    if (-not (Test-Path $altTargetDir)) {
+        New-Item -ItemType Directory -Path $altTargetDir -Force | Out-Null
+    }
+    Copy-Item -Path "$TargetDir\*" -Destination $altTargetDir -Recurse -Force
 }
 
 Write-Host "All dependencies downloaded and extracted successfully."

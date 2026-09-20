@@ -2206,6 +2206,9 @@ _GL_UNUSED_LABEL should be used with a trailing ;*/
 
 #ifdef _MSC_VER
 #define __builtin_expect(operator, value) operator
+#ifndef _Thread_local
+#define _Thread_local __declspec(thread)
+#endif
 #endif
 
 /* Define as `fork' if `vfork' does not work. */
