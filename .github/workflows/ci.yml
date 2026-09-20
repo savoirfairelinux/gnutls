@@ -38,6 +38,7 @@ jobs:
           git submodule absorbgitdirs devel/libtasn1
           git -C devel/libtasn1 reset --hard
           git submodule update --init --depth=1 devel/libtasn1
+          git submodule update --init gnulib
 
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
