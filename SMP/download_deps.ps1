@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$TargetDir = "$PSScriptRoot\..\..\prebuilt",
+    [string]$TargetDir = "",
     [int]$MsvcVer = 17,
     [string]$GitHubToken = $env:GITHUB_TOKEN
 )
@@ -9,16 +9,24 @@ $ErrorActionPreference = 'Stop'
 
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
 
+$smpDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+$repoDir = (Resolve-Path (Join-Path $smpDir "..")).Path
+$repoParentDir = (Resolve-Path (Join-Path $repoDir "..")).Path
+
+$repoPrebuiltDir = Join-Path $repoDir "prebuilt"
+$siblingPrebuiltDir = Join-Path $repoParentDir "prebuilt"
+
+if (-not $TargetDir) {
+    $TargetDir = $repoPrebuiltDir
+}
 $TargetDir = [System.IO.Path]::GetFullPath($TargetDir)
-Write-Host "Prebuilt primary destination directory: $TargetDir"
+
+Write-Host "Prebuilt destination directory: $TargetDir"
 if (-not (Test-Path -Path $TargetDir)) {
     New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null
 }
-
-# Also mirror into <repo>\prebuilt ($PSScriptRoot\..\prebuilt) for tools/paths expecting it there
-$repoPrebuiltDir = [System.IO.Path]::GetFullPath("$PSScriptRoot\..\prebuilt")
-if ($repoPrebuiltDir -ne $TargetDir -and -not (Test-Path -Path $repoPrebuiltDir)) {
-    New-Item -ItemType Directory -Path $repoPrebuiltDir -Force | Out-Null
+if (-not (Test-Path -Path $siblingPrebuiltDir)) {
+    New-Item -ItemType Directory -Path $siblingPrebuiltDir -Force | Out-Null
 }
 
 $deps = @('nettle', 'gmp', 'zlib')
@@ -71,10 +79,16 @@ foreach ($dep in $deps) {
     }
 }
 
-# Mirror to repoPrebuiltDir ($PSScriptRoot\..\prebuilt) if different
-if ($repoPrebuiltDir -ne $TargetDir) {
-    Write-Host "Mirroring prebuilt to $repoPrebuiltDir..."
-    Copy-Item -Path "$TargetDir\*" -Destination $repoPrebuiltDir -Recurse -Force
+# Mirror prebuilt to sibling and repo directories to satisfy all possible MSBuild relative paths
+foreach ($mirrorDir in @($siblingPrebuiltDir, $repoPrebuiltDir)) {
+    $fullMirror = [System.IO.Path]::GetFullPath($mirrorDir)
+    if ($fullMirror -ne $TargetDir) {
+        Write-Host "Mirroring prebuilt to $fullMirror..."
+        if (-not (Test-Path -Path $fullMirror)) {
+            New-Item -ItemType Directory -Path $fullMirror -Force | Out-Null
+        }
+        Copy-Item -Path "$TargetDir\*" -Destination $fullMirror -Recurse -Force
+    }
 }
 
 Write-Host "All dependencies downloaded and extracted successfully."
