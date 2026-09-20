@@ -79,6 +79,19 @@ foreach ($dep in $deps) {
     }
 }
 
+# Fix SMP nettle release packaging bug where version.h contains floating-point versions:
+#   #define NETTLE_VERSION_MAJOR 3.10
+#   #define NETTLE_VERSION_MINOR 10.1
+# MSVC rejects floating-point numbers in preprocessor #if conditionals with error C1017.
+$nettleVerH = Join-Path $TargetDir "include\nettle\version.h"
+if (Test-Path $nettleVerH) {
+    Write-Host "Sanitizing $nettleVerH for integer version macros..."
+    $content = Get-Content $nettleVerH -Raw
+    $content = $content -replace '(?m)^(\s*#\s*define\s+NETTLE_VERSION_MAJOR\s+)([0-9]+)\.[0-9]+', '$1$2'
+    $content = $content -replace '(?m)^(\s*#\s*define\s+NETTLE_VERSION_MINOR\s+)([0-9]+)\.[0-9]+', '$1$2'
+    Set-Content -Path $nettleVerH -Value $content
+}
+
 # Mirror prebuilt to sibling and repo directories to satisfy all possible MSBuild relative paths
 foreach ($mirrorDir in @($siblingPrebuiltDir, $repoPrebuiltDir)) {
     $fullMirror = [System.IO.Path]::GetFullPath($mirrorDir)
