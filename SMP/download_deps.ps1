@@ -25,12 +25,12 @@ if ($GitHubToken) {
 }
 
 foreach ($dep in $deps) {
-    Write-Host "Fetching latest release information for $dep..."
+    Write-Host "Fetching latest release information for ${dep}..."
     $apiUrl = "https://api.github.com/repos/ShiftMediaProject/$dep/releases/latest"
     try {
         $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers -Method Get
     } catch {
-        Write-Error "Failed to fetch latest release metadata for $dep: $_"
+        Write-Error "Failed to fetch latest release metadata for ${dep}. Error: $_"
         exit 1
     }
 
@@ -48,7 +48,7 @@ foreach ($dep in $deps) {
     try {
         Invoke-WebRequest -Uri $downloadUrl -OutFile $tempZip -Headers @{ 'User-Agent' = 'SMP-Dependency-Downloader' }
     } catch {
-        Write-Error "Failed downloading $downloadUrl: $_"
+        Write-Error "Failed downloading ${downloadUrl}. Error: $_"
         exit 1
     }
 
@@ -56,7 +56,7 @@ foreach ($dep in $deps) {
     try {
         Expand-Archive -Path $tempZip -DestinationPath $TargetDir -Force
     } catch {
-        Write-Error "Failed extracting $tempZip: $_"
+        Write-Error "Failed extracting ${tempZip}. Error: $_"
         exit 1
     } finally {
         if (Test-Path -Path $tempZip) {
