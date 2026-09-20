@@ -59,6 +59,16 @@ jobs:
         run: |
           msbuild SMP\libgnutls.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /fl /flp:logfile=build.log;verbosity=normal /m /v:m
 
+      - name: Print Build Errors on Failure
+        if: failure()
+        shell: powershell
+        run: |
+          if (Test-Path build.log) {
+            Write-Host "=== MSBuild Error and Warning lines ==="
+            Select-String -Path build.log -Pattern ": (error|fatal error|warning C4[0-9]+)" | Select-Object -First 100 | ForEach-Object { $_.Line }
+            Write-Host "=== End MSBuild Errors ==="
+          }
+
       - name: Upload Build Log on Failure
         if: failure()
         uses: actions/upload-artifact@v4
