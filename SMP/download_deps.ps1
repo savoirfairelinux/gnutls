@@ -92,14 +92,12 @@ if (Test-Path $nettleVerH) {
     Set-Content -Path $nettleVerH -Value $content
 }
 
-# Create debug library aliases (*d.lib) from release libraries if debug libraries do not exist
-Get-ChildItem -Path $TargetDir -Recurse -Filter "*.lib" | ForEach-Object {
-    $baseName = [System.IO.Path]::GetFileNameWithoutExtension($_.Name)
-    if (-not $baseName.EndsWith('d')) {
-        $debugName = "${baseName}d.lib"
-        $debugPath = Join-Path $_.DirectoryName $debugName
+# Create debug library aliases (*d.lib) from release libraries
+foreach ($libName in @('hogweed', 'libhogweed', 'nettle', 'libnettle', 'gmp', 'libgmp', 'zlib', 'libzlib')) {
+    Get-ChildItem -Path $TargetDir -Recurse -Filter "${libName}.lib" | ForEach-Object {
+        $debugPath = Join-Path $_.DirectoryName "${libName}d.lib"
         if (-not (Test-Path $debugPath)) {
-            Write-Host "Creating debug lib alias: $debugName"
+            Write-Host "Creating debug lib alias: ${libName}d.lib in $($_.DirectoryName)"
             Copy-Item -Path $_.FullName -Destination $debugPath -Force
         }
     }
