@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+    tags: [ '*' ]
+  pull_request:
+    branches: [ master ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-msvc:
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [x64, Win32]
+        configuration: [Release, ReleaseDLL, ReleaseDLLStaticDeps, Debug, DebugDLL]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+
+      - name: Initialize submodules
+        shell: cmd
+        run: |
+          git submodule init
+          for /F "tokens=*" %%n IN ('git config submodule.devel/libtasn1.url') DO @(git clone -n --depth=1 %%n devel/libtasn1)
+          git -C devel/libtasn1 config core.protectNTFS false
+          git -C devel/libtasn1 config core.sparseCheckout true
+          echo /* > devel\libtasn1\.git\info\sparse-checkout
+          echo !/tests/ >> devel\libtasn1\.git\info\sparse-checkout
+          git submodule absorbgitdirs devel/libtasn1
+          git -C devel/libtasn1 reset --hard
+          git submodule update --init --depth=1
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup VSYASM
+        shell: powershell
+        run: |
+          (New-Object Net.WebClient).DownloadFile('https://github.com/ShiftMediaProject/VSYASM/releases/download/0.7/VSYASM.zip', "$pwd\yasm.zip")
+          Add-Type -A 'System.IO.Compression.FileSystem'
+          [IO.Compression.ZipFile]::ExtractToDirectory("$pwd\yasm.zip", "$pwd\TempYASMUnpack")
+          & ".\TempYASMUnpack\install_script.bat"
+          $vctargets = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\MSBuild\ToolsVersions\4.0").VCTargetsPath
+          if ($vctargets -and (Test-Path "$vctargets\BuildCustomizations")) {
+            Copy-Item -Force "TempYASMUnpack\*.*" "$vctargets\BuildCustomizations"
+          }
+
+      - name: Fetch Dependencies
+        shell: cmd
+        run: |
+          call "%GITHUB_WORKSPACE%\SMP\project_get_dependencies.bat"
+
+      - name: Build libgnutls
+        shell: cmd
+        run: |
+          msbuild SMP\libgnutls.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /p:OutDir=%GITHUB_WORKSPACE%\build_out\ /m /v:m
+
+      - name: Upload Artifacts
+        if: matrix.configuration == 'Release' || matrix.configuration == 'ReleaseDLLStaticDeps'
+        uses: actions/upload-artifact@v4
+        with:
+          name: libgnutls-${{ matrix.platform }}-${{ matrix.configuration }}
+          path: |
+            build_out/bin/
+            build_out/lib/
+            build_out/include/
+          if-no-files-found: ignore
