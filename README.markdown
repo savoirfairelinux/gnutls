@@ -1,42 +1,37 @@
-ShiftMediaProject GnuTLS
-=============
-[![Build status](https://ci.appveyor.com/api/projects/status/bo4w5cxmcxaiqdev?svg=true)](https://ci.appveyor.com/project/Sibras/gnutls)
-[![Github All Releases](https://img.shields.io/github/downloads/ShiftMediaProject/gnutls/total.svg)](https://github.com/ShiftMediaProject/gnutls/releases)
-[![GitHub release](https://img.shields.io/github/release/ShiftMediaProject/gnutls.svg)](https://github.com/ShiftMediaProject/gnutls/releases/latest)
-[![GitHub issues](https://img.shields.io/github/issues/ShiftMediaProject/gnutls.svg)](https://github.com/ShiftMediaProject/gnutls/issues)
-[![license](https://img.shields.io/github/license/ShiftMediaProject/gnutls.svg)](https://github.com/ShiftMediaProject/gnutls)
-[![donate](https://img.shields.io/badge/donate-link-brightgreen.svg)](https://shiftmediaproject.github.io/8-donate/)
+GnuTLS for Windows (MSVC)
+=========================
+[![CI](https://github.com/savoirfairelinux/gnutls/actions/workflows/ci.yml/badge.svg)](https://github.com/savoirfairelinux/gnutls/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/release/savoirfairelinux/gnutls.svg)](https://github.com/savoirfairelinux/gnutls/releases/latest)
+[![GitHub issues](https://img.shields.io/github/issues/savoirfairelinux/gnutls.svg)](https://github.com/savoirfairelinux/gnutls/issues)
+[![license](https://img.shields.io/github/license/savoirfairelinux/gnutls.svg)](https://github.com/savoirfairelinux/gnutls)
 
-Due to limited time and resources this project is no longer maintained and is provided as an archive only reference.
+> **Note**: This project is maintained by [Savoir-faire Linux](https://www.savoirfairelinux.com/), taking over maintenance from ShiftMediaProject. It provides native Windows MSVC build support and serves as the source repository for the `gnutls` port for Windows (x64 and x86) in vcpkg.
 
-## ShiftMediaProject
+## Overview
 
-Shift Media Project aims to provide native Windows development libraries for gnutls and associated dependencies to support simpler creation and debugging of rich media content directly within Visual Studio. [https://shiftmediaproject.github.io/](https://shiftmediaproject.github.io/)
+This project provides native Microsoft Visual Studio (MSVC) build projects and fixes for **GnuTLS** and its dependencies on Windows.
 
 ## GnuTLS
 
 GnuTLS is a secure communications library implementing the SSL, TLS and DTLS protocols and technologies around them. [https://www.gnutls.org/](https://www.gnutls.org/)
 
-## Downloads
+## Downloads & Packages
 
-Development libraries are available from the [releases](https://github.com/ShiftMediaProject/gnutls/releases) page. These libraries are available for each supported Visual Studio version with a different download for each version. Each download contains both static and dynamic libraries to choose from in both 32bit and 64bit versions.
+- Development libraries and release archives are published on the GitHub [releases](https://github.com/savoirfairelinux/gnutls/releases) page.
+- Available for integration via **vcpkg** for Windows (`windows-x64`, `windows-x86`).
 
-## Code
+## Building with Visual Studio
 
-This repository contains code from the corresponding upstream project with additional modifications to allow it to be compiled with Visual Studio. New custom Visual Studio projects are provided within the 'SMP' sub-directory. Refer to the 'readme' contained within the 'SMP' directory for further details.
+Visual Studio solution and project files are located in the `SMP/` directory:
+- `SMP/libgnutls.sln`
+- Run `SMP/project_get_dependencies.bat` to retrieve dependencies (nettle, gmp, zlib).
+- Refer to `SMP/readme.txt` for additional configuration options.
 
-## Issues
+## Issues & Contributing
 
-Any issues related to the ShiftMediaProject specific changes should be sent to the [issues](https://github.com/ShiftMediaProject/gnutls/issues) page for the repository. Any issues related to the upstream project should be sent upstream directly (see the issues information of the upstream repository for more details).
+- For issues and pull requests related to MSVC build support, please use the [issue tracker](https://github.com/savoirfairelinux/gnutls/issues).
+- Issues and fixes that apply to upstream GnuTLS should be reported upstream to [GnuTLS GitLab](https://gitlab.com/gnutls/gnutls).
 
 ## License
 
-ShiftMediaProject original code is released under [LGPLv2.1](https://www.gnu.org/licenses/lgpl-2.1.html). All code from the upstream repository remains under its original license (see the license information of the upstream repository for more details).
-
-## Copyright
-
-As this repository includes code from upstream project(s) it includes many copyright owners. ShiftMediaProject makes NO claim of copyright on any upstream code. However, all original ShiftMediaProject authored code is copyright ShiftMediaProject. For a complete copyright list please checkout the source code to examine license headers. Unless expressly stated otherwise all code submitted to the ShiftMediaProject project (in any form) is licensed under [LGPLv2.1](https://www.gnu.org/licenses/lgpl-2.1.html) and copyright is donated to ShiftMediaProject. If you submit code that is not your own work it is your responsibility to place a header stating the copyright.
-
-## Contributing
-
-Patches related to the ShiftMediaProject specific changes should be sent as pull requests to the main repository. Any changes related to the upstream project should be sent upstream directly (see the contributing information of the upstream repository for more details).
+Code authored for MSVC compatibility is licensed under [LGPLv2.1](https://www.gnu.org/licenses/lgpl-2.1.html). All upstream code remains under its original GNU LGPL / GPL license terms.
