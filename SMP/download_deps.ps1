@@ -92,6 +92,19 @@ if (Test-Path $nettleVerH) {
     Set-Content -Path $nettleVerH -Value $content
 }
 
+# Create debug library aliases (*d.lib) from release libraries if debug libraries do not exist
+Get-ChildItem -Path $TargetDir -Recurse -Filter "*.lib" | ForEach-Object {
+    $baseName = [System.IO.Path]::GetFileNameWithoutExtension($_.Name)
+    if (-not $baseName.EndsWith('d')) {
+        $debugName = "${baseName}d.lib"
+        $debugPath = Join-Path $_.DirectoryName $debugName
+        if (-not (Test-Path $debugPath)) {
+            Write-Host "Creating debug lib alias: $debugName"
+            Copy-Item -Path $_.FullName -Destination $debugPath -Force
+        }
+    }
+}
+
 # Mirror prebuilt to sibling and repo directories to satisfy all possible MSBuild relative paths
 foreach ($mirrorDir in @($siblingPrebuiltDir, $repoPrebuiltDir)) {
     $fullMirror = [System.IO.Path]::GetFullPath($mirrorDir)
