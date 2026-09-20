@@ -29,6 +29,7 @@ Visual Studio solution and project files are located in the `SMP/` directory:
 
 ## Issues & Contributing
 
+- For maintainers looking to bump to a newer GnuTLS release, see [MAINTAINERS.md](MAINTAINERS.md).
 - For issues and pull requests related to MSVC build support, please use the [issue tracker](https://github.com/savoirfairelinux/gnutls/issues).
 - Issues and fixes that apply to upstream GnuTLS should be reported upstream to [GnuTLS GitLab](https://gitlab.com/gnutls/gnutls).
 
