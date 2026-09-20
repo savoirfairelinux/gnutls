@@ -62,6 +62,13 @@ struct gnutls_pkcs11_obj_st {
 	/* only when pubkey */
 	gnutls_datum_t pubkey[MAX_PUBLIC_PARAMS_SIZE];
 	unsigned pubkey_size;
+
+	/* only when privkey.
+	 * use MAX_PUBLIC_PARAMS_SIZE instead of MAX_PRIV_PARAMS_SIZE
+	 * since we only care about the types for now*/
+	gnutls_datum_t privkey_type[MAX_PUBLIC_PARAMS_SIZE];
+	unsigned privkey_size;
+
 	gnutls_pk_algorithm_t pk_algorithm;
 	unsigned int key_usage;
 
@@ -238,6 +245,10 @@ int _pkcs11_privkey_get_pubkey(gnutls_pkcs11_privkey_t pkey,
 
 int _gnutls_pubkey_parse_ecc_eddsa_params(const gnutls_datum_t *parameters,
 					  gnutls_ecc_curve_t *outcurve);
+
+int _gnutls_pubkey_import_ecc_eddsa(gnutls_pubkey_t key,
+				    const gnutls_datum_t *parameters,
+				    const gnutls_datum_t *ecpoint);
 
 static inline int pk_to_mech(gnutls_pk_algorithm_t pk)
 {
@@ -422,7 +433,7 @@ const char *pkcs11_strerror(ck_rv_t rv);
  * a token. */
 inline static bool is_pkcs11_url_object(const char *url)
 {
-	if (strstr(url, "id=") != 0 || strstr(url, "object=") != 0)
+	if (strstr(url, "id=") != NULL || strstr(url, "object=") != NULL)
 		return 1;
 	return 0;
 }

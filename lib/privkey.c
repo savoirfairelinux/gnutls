@@ -35,7 +35,7 @@
 #include "fips.h"
 #include "system-keys.h"
 #include "urls.h"
-#include "tpm2.h"
+#include "tpm2/tpm2.h"
 #include "pkcs11_int.h"
 #include "abstract_int.h"
 
@@ -173,12 +173,14 @@ static int privkey_to_pubkey(gnutls_pk_algorithm_t pk,
 	case GNUTLS_PK_RSA_PSS:
 	case GNUTLS_PK_RSA_OAEP:
 	case GNUTLS_PK_RSA:
-		pub->params[0] = _gnutls_mpi_copy(priv->params[0]);
-		pub->params[1] = _gnutls_mpi_copy(priv->params[1]);
+		pub->params[RSA_MODULUS] =
+			_gnutls_mpi_copy(priv->params[RSA_MODULUS]);
+		pub->params[RSA_PUB] = _gnutls_mpi_copy(priv->params[RSA_PUB]);
 
 		pub->params_nr = RSA_PUBLIC_PARAMS;
 
-		if (pub->params[0] == NULL || pub->params[1] == NULL) {
+		if (pub->params[RSA_MODULUS] == NULL ||
+		    pub->params[RSA_PUB] == NULL) {
 			gnutls_assert();
 			ret = GNUTLS_E_MEMORY_ERROR;
 			goto cleanup;
@@ -243,6 +245,9 @@ static int privkey_to_pubkey(gnutls_pk_algorithm_t pk,
 	case GNUTLS_PK_EDDSA_ED448:
 	case GNUTLS_PK_ECDH_X25519:
 	case GNUTLS_PK_ECDH_X448:
+	case GNUTLS_PK_MLDSA44:
+	case GNUTLS_PK_MLDSA65:
+	case GNUTLS_PK_MLDSA87:
 		ret = _gnutls_set_datum(&pub->raw_pub, priv->raw_pub.data,
 					priv->raw_pub.size);
 		if (ret < 0)
@@ -1587,7 +1592,8 @@ int gnutls_privkey_decrypt_data(gnutls_privkey_t key, unsigned int flags,
 	switch (key->type) {
 	case GNUTLS_PRIVKEY_X509:
 		return _gnutls_pk_decrypt(key->pk_algorithm, plaintext,
-					  ciphertext, &key->key.x509->params);
+					  ciphertext, &key->key.x509->params,
+					  &key->key.x509->params.spki);
 #ifdef ENABLE_PKCS11
 	case GNUTLS_PRIVKEY_PKCS11:
 		return _gnutls_pkcs11_privkey_decrypt_data(
@@ -1654,7 +1660,8 @@ int gnutls_privkey_decrypt_data2(gnutls_privkey_t key, unsigned int flags,
 	case GNUTLS_PRIVKEY_X509:
 		return _gnutls_pk_decrypt2(key->pk_algorithm, ciphertext,
 					   plaintext, plaintext_size,
-					   &key->key.x509->params);
+					   &key->key.x509->params,
+					   &key->key.x509->params.spki);
 #ifdef ENABLE_PKCS11
 	case GNUTLS_PRIVKEY_PKCS11:
 		return _gnutls_pkcs11_privkey_decrypt_data2(key->key.pkcs11,
@@ -1924,13 +1931,14 @@ int gnutls_privkey_verify_params(gnutls_privkey_t key)
 int gnutls_privkey_get_spki(gnutls_privkey_t privkey, gnutls_x509_spki_t spki,
 			    unsigned int flags)
 {
-	gnutls_x509_spki_t p = &privkey->key.x509->params.spki;
+	gnutls_x509_spki_t p;
 
 	if (privkey == NULL || privkey->type != GNUTLS_PRIVKEY_X509) {
 		gnutls_assert();
 		return GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE;
 	}
 
+	p = &privkey->key.x509->params.spki;
 	if (p->pk == GNUTLS_PK_UNKNOWN)
 		return gnutls_assert_val(GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE);
 

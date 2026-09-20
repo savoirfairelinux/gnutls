@@ -51,11 +51,10 @@ check_PROGRAMS += cipher-openssl-compat
 TESTS += test-ciphers-openssl.sh
 endif
 
-EXTRA_DIST = README gnutls-asan.supp
+EXTRA_DIST = README
 
 TESTS_ENVIRONMENT = EXEEXT=$(EXEEXT) \
 	LC_ALL="C"						\
-	LSAN_OPTIONS=suppressions=$(srcdir)/gnutls-asan.supp	\
 	GNUTLS_TEST_SUITE_RUN=1					\
 	OPENSSL_ia32cap=0x00000000				\
 	GNUTLS_SYSTEM_PRIORITY_FILE=$(abs_top_srcdir)/tests/system.prio	\
@@ -66,3 +65,6 @@ TESTS_ENVIRONMENT = EXEEXT=$(EXEEXT) \
 if WINDOWS
 TESTS_ENVIRONMENT += WINDOWS=1
 endif
+
+TEST_EXTENSIONS = .sh
+SH_LOG_COMPILER = $(SHELL)

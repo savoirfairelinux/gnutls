@@ -498,6 +498,39 @@ error:
 	return ret;
 }
 
+/* If succeeds, returns the number of padding bytes to be removed;
+ * zero otherwise.
+ */
+unsigned int _gnutls_pkcs7_unpad(const uint8_t *block, unsigned int block_size)
+{
+	uint8_t padding = block[block_size - 1];
+	volatile unsigned int mask = ~0;
+	volatile unsigned int count = 0;
+
+	/* Count consecutive PADDING bytes from the end, in a
+	 * constant-time manner.
+	 */
+	for (size_t i = block_size; i > 0; i--) {
+		volatile unsigned int mask2;
+
+		mask2 = -(unsigned int)(block[i - 1] == padding);
+		mask2 &= -(unsigned int)(count < padding);
+
+		/* MASK is initially ~0 and will be flipped to 0 upon first
+		 * non-padding bytes.
+		 */
+		mask &= mask2;
+		count += 1 & mask;
+	}
+
+	/* PADDING == 0 is effectively excluded here, given COUNT
+	 * will never be 0.
+	 */
+	mask = -(unsigned int)(count <= block_size);
+	mask &= -(unsigned int)(count == padding);
+	return count & mask;
+}
+
 /**
  * gnutls_cipher_decrypt3:
  * @handle: is a #gnutls_cipher_hd_t type
@@ -532,22 +565,17 @@ int gnutls_cipher_decrypt3(gnutls_cipher_hd_t handle, const void *ctext,
 	if (_gnutls_cipher_type(h->ctx_enc.e) == CIPHER_BLOCK &&
 	    (flags & GNUTLS_CIPHER_PADDING_PKCS7)) {
 		uint8_t *p = ptext;
-		uint8_t padding = p[*ptext_len - 1];
-		if (!padding ||
-		    padding > _gnutls_cipher_get_block_size(h->ctx_enc.e)) {
-			return gnutls_assert_val(GNUTLS_E_DECRYPTION_FAILED);
-		}
-		/* Check that the prior bytes are all PADDING */
-		for (size_t i = *ptext_len - padding; i < *ptext_len; i++) {
-			if (padding != p[*ptext_len - 1]) {
-				return gnutls_assert_val(
-					GNUTLS_E_DECRYPTION_FAILED);
-			}
-		}
+		size_t block_size = _gnutls_cipher_get_block_size(h->ctx_enc.e);
+		uint8_t *block = &p[*ptext_len - block_size];
+		unsigned int padding = _gnutls_pkcs7_unpad(block, block_size);
+		volatile unsigned int mask;
+
+		mask = -(unsigned int)(padding == 0);
+		ret = GNUTLS_E_DECRYPTION_FAILED & mask;
 		*ptext_len -= padding;
 	}
 
-	return 0;
+	return ret;
 }
 
 /**
@@ -970,6 +998,8 @@ int gnutls_hash_fast(gnutls_digest_algorithm_t algorithm, const void *ptext,
 		_gnutls_switch_fips_state(GNUTLS_FIPS140_OP_ERROR);
 	} else if (not_approved) {
 		_gnutls_switch_fips_state(GNUTLS_FIPS140_OP_NOT_APPROVED);
+	} else {
+		_gnutls_switch_fips_state(GNUTLS_FIPS140_OP_APPROVED);
 	}
 
 	return ret;
@@ -2052,8 +2082,6 @@ void gnutls_aead_cipher_deinit(gnutls_aead_cipher_hd_t handle)
 	gnutls_free(handle);
 }
 
-extern gnutls_crypto_kdf_st _gnutls_kdf_ops;
-
 /* Same as @gnutls_hkdf_extract but without changing FIPS context */
 int _gnutls_hkdf_extract(gnutls_mac_algorithm_t mac, const gnutls_datum_t *key,
 			 const gnutls_datum_t *salt, void *output)
@@ -2067,9 +2095,10 @@ int _gnutls_hkdf_extract(gnutls_mac_algorithm_t mac, const gnutls_datum_t *key,
 	/* We don't check whether MAC is approved, because HKDF is
 	 * only approved in TLS, which is handled separately. */
 
-	return _gnutls_kdf_ops.hkdf_extract(mac, key->data, key->size,
-					    salt ? salt->data : NULL,
-					    salt ? salt->size : 0, output);
+	return _gnutls_kdf_backend()->hkdf_extract(mac, key->data, key->size,
+						   salt ? salt->data : NULL,
+						   salt ? salt->size : 0,
+						   output);
 }
 
 /**
@@ -2113,9 +2142,9 @@ int _gnutls_hkdf_expand(gnutls_mac_algorithm_t mac, const gnutls_datum_t *key,
 	/* We don't check whether MAC is approved, because HKDF is
 	 * only approved in TLS, which is handled separately. */
 
-	return _gnutls_kdf_ops.hkdf_expand(mac, key->data, key->size,
-					   info->data, info->size, output,
-					   length);
+	return _gnutls_kdf_backend()->hkdf_expand(mac, key->data, key->size,
+						  info->data, info->size,
+						  output, length);
 }
 
 /**
@@ -2197,8 +2226,9 @@ int gnutls_pbkdf2(gnutls_mac_algorithm_t mac, const gnutls_datum_t *key,
 		not_approved = true;
 	}
 
-	ret = _gnutls_kdf_ops.pbkdf2(mac, key->data, key->size, salt->data,
-				     salt->size, iter_count, output, length);
+	ret = _gnutls_kdf_backend()->pbkdf2(mac, key->data, key->size,
+					    salt->data, salt->size, iter_count,
+					    output, length);
 	if (ret < 0) {
 		_gnutls_switch_fips_state(GNUTLS_FIPS140_OP_ERROR);
 	} else if (not_approved) {

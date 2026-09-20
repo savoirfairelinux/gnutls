@@ -121,6 +121,7 @@ static void print_name(gnutls_buffer_st *str, const char *prefix, unsigned type,
 	if ((type == GNUTLS_SAN_DNSNAME || type == GNUTLS_SAN_OTHERNAME_XMPP ||
 	     type == GNUTLS_SAN_OTHERNAME_KRB5PRINCIPAL ||
 	     type == GNUTLS_SAN_OTHERNAME_MSUSERPRINCIPAL ||
+	     type == GNUTLS_SAN_OTHERNAME_SRV ||
 	     type == GNUTLS_SAN_RFC822NAME || type == GNUTLS_SAN_URI) &&
 	    sname != NULL && strlen(sname) != name->size) {
 		adds(str, _("warning: SAN contains an embedded NUL, "
@@ -178,6 +179,11 @@ static void print_name(gnutls_buffer_st *str, const char *prefix, unsigned type,
 	case GNUTLS_SAN_OTHERNAME_MSUSERPRINCIPAL:
 		addf(str, _("%sUser Principal Name: %.*s\n"), prefix,
 		     name->size, NON_NULL(name->data));
+		break;
+
+	case GNUTLS_SAN_OTHERNAME_SRV:
+		addf(str, _("%sSRVName: %.*s\n"), prefix, name->size,
+		     NON_NULL(name->data));
 		break;
 
 	default:
@@ -352,12 +358,19 @@ static void print_nc(gnutls_buffer_st *str, const char *prefix,
 	char new_prefix[16];
 
 	ret = gnutls_x509_name_constraints_init(&nc);
-	if (ret < 0)
+	if (ret < 0) {
+		addf(str, "error: gnutls_x509_name_constraints_init(): %s\n",
+		     gnutls_strerror(ret));
 		return;
+	}
 
 	ret = gnutls_x509_ext_import_name_constraints(der, nc, 0);
-	if (ret < 0)
+	if (ret < 0) {
+		addf(str,
+		     "error: gnutls_x509_ext_import_name_constraints(): %s\n",
+		     gnutls_strerror(ret));
 		goto cleanup;
+	}
 
 	snprintf(new_prefix, sizeof(new_prefix), "%s\t\t\t\t", prefix);
 
@@ -370,6 +383,10 @@ static void print_nc(gnutls_buffer_st *str, const char *prefix,
 				addf(str, _("%s\t\t\tPermitted:\n"), prefix);
 
 			print_name(str, new_prefix, type, &name, 1);
+		} else if (ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+			addf(str,
+			     "error: gnutls_x509_name_constraints_get_permitted(): %s\n",
+			     gnutls_strerror(ret));
 		}
 	} while (ret == 0);
 
@@ -383,6 +400,10 @@ static void print_nc(gnutls_buffer_st *str, const char *prefix,
 				addf(str, _("%s\t\t\tExcluded:\n"), prefix);
 
 			print_name(str, new_prefix, type, &name, 1);
+		} else if (ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
+			addf(str,
+			     "error: gnutls_x509_name_constraints_get_excluded(): %s\n",
+			     gnutls_strerror(ret));
 		}
 	} while (ret == 0);
 

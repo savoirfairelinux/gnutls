@@ -35,6 +35,7 @@
 #include "x86-common.h"
 #ifdef HAVE_LIBNETTLE
 #include <nettle/aes.h> /* for key generation in 192 and 256 bits */
+#include <nettle/hmac.h> /* to check if custom hmac is supported */
 #include "sha-padlock.h"
 #endif
 #include "aes-padlock.h"
@@ -159,7 +160,7 @@ static inline void get_cpuid_level7(unsigned int *eax, unsigned int *ebx,
 				    unsigned int *ecx, unsigned int *edx)
 {
 	/* we avoid using __get_cpuid_count, because it is not available with gcc 4.8 */
-	if (__get_cpuid_max(7, 0) < 7)
+	if (__get_cpuid_max(7, NULL) < 7)
 		return;
 
 	__cpuid_count(7, 0, *eax, *ebx, *ecx, *edx);
@@ -368,8 +369,8 @@ static int check_fast_pclmul(void)
 
 static int check_phe_partial(void)
 {
-	const char text[64] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-			      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+	const char text[SHA1_BLOCK_SIZE + 1 /*NUL*/] =
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 	uint32_t iv[5] = { 0x67452301UL, 0xEFCDAB89UL, 0x98BADCFEUL,
 			   0x10325476UL, 0xC3D2E1F0UL };
 
@@ -488,6 +489,7 @@ static void register_x86_padlock_crypto(unsigned capabilities)
 			gnutls_assert();
 		}
 
+#if defined(HAVE_LIBNETTLE) && defined(HMAC_SET_KEY)
 		ret = gnutls_crypto_single_mac_register(
 			GNUTLS_MAC_SHA1, 80, &_gnutls_hmac_sha_x86_ssse3, 0);
 		if (ret < 0)
@@ -502,6 +504,7 @@ static void register_x86_padlock_crypto(unsigned capabilities)
 			GNUTLS_MAC_SHA256, 80, &_gnutls_hmac_sha_x86_ssse3, 0);
 		if (ret < 0)
 			gnutls_assert();
+#endif
 
 		ret = gnutls_crypto_single_digest_register(
 			GNUTLS_DIG_SHA384, 80, &_gnutls_sha_x86_ssse3, 0);
@@ -512,6 +515,7 @@ static void register_x86_padlock_crypto(unsigned capabilities)
 			GNUTLS_DIG_SHA512, 80, &_gnutls_sha_x86_ssse3, 0);
 		if (ret < 0)
 			gnutls_assert();
+#if defined(HAVE_LIBNETTLE) && defined(HMAC_SET_KEY)
 		ret = gnutls_crypto_single_mac_register(
 			GNUTLS_MAC_SHA384, 80, &_gnutls_hmac_sha_x86_ssse3, 0);
 		if (ret < 0)
@@ -521,6 +525,7 @@ static void register_x86_padlock_crypto(unsigned capabilities)
 			GNUTLS_MAC_SHA512, 80, &_gnutls_hmac_sha_x86_ssse3, 0);
 		if (ret < 0)
 			gnutls_assert();
+#endif
 	}
 
 	if (check_optimized_aes()) {
@@ -721,6 +726,7 @@ static void register_x86_padlock_crypto(unsigned capabilities)
 				gnutls_assert();
 			}
 
+#if defined(HAVE_LIBNETTLE) && defined(HMAC_SET_KEY)
 			ret = gnutls_crypto_single_mac_register(
 				GNUTLS_MAC_SHA384, 80,
 				&_gnutls_hmac_sha_padlock, 0);
@@ -734,6 +740,7 @@ static void register_x86_padlock_crypto(unsigned capabilities)
 			if (ret < 0) {
 				gnutls_assert();
 			}
+#endif
 		}
 
 		ret = gnutls_crypto_single_digest_register(
@@ -754,6 +761,7 @@ static void register_x86_padlock_crypto(unsigned capabilities)
 			gnutls_assert();
 		}
 
+#if defined(HAVE_LIBNETTLE) && defined(HMAC_SET_KEY)
 		ret = gnutls_crypto_single_mac_register(
 			GNUTLS_MAC_SHA1, 90, &_gnutls_hmac_sha_padlock, 0);
 		if (ret < 0) {
@@ -767,6 +775,7 @@ static void register_x86_padlock_crypto(unsigned capabilities)
 		if (ret < 0) {
 			gnutls_assert();
 		}
+#endif
 	} else if (phe) {
 		/* Original padlock PHE. Does not support incremental operations.
 		 */
@@ -784,6 +793,7 @@ static void register_x86_padlock_crypto(unsigned capabilities)
 			gnutls_assert();
 		}
 
+#if defined(HAVE_LIBNETTLE) && defined(HMAC_SET_KEY)
 		ret = gnutls_crypto_single_mac_register(
 			GNUTLS_MAC_SHA1, 90, &_gnutls_hmac_sha_padlock_oneshot,
 			0);
@@ -797,6 +807,7 @@ static void register_x86_padlock_crypto(unsigned capabilities)
 		if (ret < 0) {
 			gnutls_assert();
 		}
+#endif
 	}
 #endif
 
@@ -808,6 +819,7 @@ enum x86_cpu_vendor {
 	X86_CPU_VENDOR_OTHER,
 	X86_CPU_VENDOR_INTEL,
 	X86_CPU_VENDOR_AMD,
+	X86_CPU_VENDOR_HYGON,
 };
 
 static enum x86_cpu_vendor check_x86_cpu_vendor(void)
@@ -826,6 +838,11 @@ static enum x86_cpu_vendor check_x86_cpu_vendor(void)
 	if (memcmp(&b, "Auth", 4) == 0 && memcmp(&d, "enti", 4) == 0 &&
 	    memcmp(&c, "cAMD", 4) == 0) {
 		return X86_CPU_VENDOR_AMD;
+	}
+
+	if (memcmp(&b, "Hygo", 4) == 0 && memcmp(&d, "nGen", 4) == 0 &&
+	    memcmp(&c, "uine", 4) == 0) {
+		return X86_CPU_VENDOR_HYGON;
 	}
 
 	return X86_CPU_VENDOR_OTHER;
@@ -933,6 +950,7 @@ static void register_x86_intel_crypto(unsigned capabilities)
 			gnutls_assert();
 		}
 
+#if defined(HAVE_LIBNETTLE) && defined(HMAC_SET_KEY)
 		ret = gnutls_crypto_single_mac_register(
 			GNUTLS_MAC_SHA1, 80, &_gnutls_hmac_sha_x86_ssse3, 0);
 		if (ret < 0)
@@ -947,6 +965,7 @@ static void register_x86_intel_crypto(unsigned capabilities)
 			GNUTLS_MAC_SHA256, 80, &_gnutls_hmac_sha_x86_ssse3, 0);
 		if (ret < 0)
 			gnutls_assert();
+#endif
 
 		ret = gnutls_crypto_single_digest_register(
 			GNUTLS_DIG_SHA384, 80, &_gnutls_sha_x86_ssse3, 0);
@@ -957,6 +976,7 @@ static void register_x86_intel_crypto(unsigned capabilities)
 			GNUTLS_DIG_SHA512, 80, &_gnutls_sha_x86_ssse3, 0);
 		if (ret < 0)
 			gnutls_assert();
+#if defined(HAVE_LIBNETTLE) && defined(HMAC_SET_KEY)
 		ret = gnutls_crypto_single_mac_register(
 			GNUTLS_MAC_SHA384, 80, &_gnutls_hmac_sha_x86_ssse3, 0);
 		if (ret < 0)
@@ -966,6 +986,7 @@ static void register_x86_intel_crypto(unsigned capabilities)
 			GNUTLS_MAC_SHA512, 80, &_gnutls_hmac_sha_x86_ssse3, 0);
 		if (ret < 0)
 			gnutls_assert();
+#endif
 	}
 
 	if (check_optimized_aes()) {

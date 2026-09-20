@@ -62,11 +62,12 @@ GNUTLS_STATIC_MUTEX(pkcs11_mutex);
 
 struct gnutls_pkcs11_provider_st {
 	struct ck_function_list *module;
+	char *module_name;
 	unsigned active;
-	unsigned custom_init;
 	unsigned trusted; /* in the sense of p11-kit trusted:
 				 * it can be used for verification */
 	struct ck_info info;
+	struct ck_c_initialize_args init_args;
 };
 
 struct find_flags_data_st {
@@ -147,6 +148,12 @@ gnutls_pkcs11_token_callback_t _gnutls_token_func;
 void *_gnutls_token_data;
 
 static int auto_load(unsigned trusted);
+
+static int pkcs11_read_privkey_type(struct ck_function_list *module,
+				    ck_session_handle_t pks,
+				    ck_object_handle_t ctx,
+				    ck_key_type_t key_type,
+				    gnutls_pkcs11_obj_t pobj);
 
 int pkcs11_rv_to_err(ck_rv_t rv)
 {
@@ -246,8 +253,93 @@ static int scan_slots(struct gnutls_pkcs11_provider_st *p, ck_slot_id_t *slots,
 	return 0;
 }
 
-static int pkcs11_add_module(const char *name, struct ck_function_list *module,
-			     unsigned custom_init, const char *params)
+static const struct ck_c_initialize_args default_init_args = {
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	CKF_LIBRARY_CANT_CREATE_OS_THREADS | CKF_OS_LOCKING_OK,
+	NULL,
+};
+
+static void pkcs11_provider_deinit(struct gnutls_pkcs11_provider_st *provider)
+{
+	p11_kit_module_finalize(provider->module);
+	p11_kit_module_release(provider->module);
+	gnutls_free(provider->init_args.reserved);
+	gnutls_free(provider->module_name);
+}
+
+static int pkcs11_provider_init(struct gnutls_pkcs11_provider_st *provider,
+				struct ck_function_list *module,
+				const char *module_name, const void *params)
+{
+	struct ck_c_initialize_args args;
+	const void *reserved = NULL;
+	ck_rv_t rv;
+	char *p;
+
+	_gnutls_debug_log("p11: Initializing module: %s\n", module_name);
+
+	if (params && (p = strstr(params, "p11-kit:")) != NULL) {
+		reserved = (char *)(p + sizeof("p11-kit:") - 1);
+	}
+
+	/* First try with CKF_LIBRARY_CANT_CREATE_OS_THREADS |
+	 * CKF_OS_LOCKING_OK, then fall back without it */
+	args = default_init_args;
+	args.reserved = (void *)reserved;
+	rv = module->C_Initialize(&args);
+
+	if (rv == CKR_NEED_TO_CREATE_THREADS || rv == CKR_CANT_LOCK) {
+		struct ck_c_initialize_args *pargs;
+		if (reserved) {
+			memset(&args, 0, sizeof(args));
+			args.reserved = (void *)reserved;
+			pargs = &args;
+		} else {
+			pargs = NULL;
+		}
+		rv = module->C_Initialize(pargs);
+	}
+
+	if (rv != CKR_OK) {
+		int ret;
+
+		gnutls_assert();
+		ret = pkcs11_rv_to_err(rv);
+		assert(ret < 0);
+		return ret;
+	}
+
+	if (args.flags & CKF_OS_LOCKING_OK) {
+		_gnutls_debug_log(
+			"p11: Module %s is initialized in a thread-safe mode\n",
+			module_name);
+	} else {
+		_gnutls_debug_log(
+			"p11: Module %s is initialized NOT in a thread-safe mode\n",
+			module_name);
+	}
+
+	if (args.reserved) {
+		args.reserved = gnutls_strdup((const char *)args.reserved);
+		if (!args.reserved)
+			return GNUTLS_E_MEMORY_ERROR;
+	}
+
+	memset(provider, 0, sizeof(*provider));
+	provider->module = module;
+	provider->module_name = gnutls_strdup(module_name);
+	provider->init_args = args;
+	if (p11_kit_module_get_flags(module) & P11_KIT_MODULE_TRUSTED ||
+	    (params != NULL && strstr(params, "trusted") != NULL))
+		provider->trusted = 1;
+
+	return 0;
+}
+
+static int pkcs11_provider_add(const struct gnutls_pkcs11_provider_st *provider)
 {
 	unsigned int i;
 	struct ck_info info;
@@ -258,30 +350,24 @@ static int pkcs11_add_module(const char *name, struct ck_function_list *module,
 	}
 
 	memset(&info, 0, sizeof(info));
-	pkcs11_get_module_info(module, &info);
+	pkcs11_get_module_info(provider->module, &info);
 
 	/* initially check if this module is a duplicate */
 	for (i = 0; i < active_providers; i++) {
 		/* already loaded, skip the rest */
-		if (module == providers[i].module ||
+		if (provider->module == providers[i].module ||
 		    memcmp(&info, &providers[i].info, sizeof(info)) == 0) {
 			_gnutls_debug_log("p11: module %s is already loaded.\n",
-					  name);
+					  provider->module_name);
 			return GNUTLS_E_INT_RET_0;
 		}
 	}
 
+	memcpy(&providers[active_providers], provider, sizeof(*provider));
+	memcpy(&providers[active_providers].info, &info, sizeof(info));
+	providers[active_providers].active = 1;
+
 	active_providers++;
-	providers[active_providers - 1].module = module;
-	providers[active_providers - 1].active = 1;
-	providers[active_providers - 1].trusted = 0;
-	providers[active_providers - 1].custom_init = custom_init;
-
-	if (p11_kit_module_get_flags(module) & P11_KIT_MODULE_TRUSTED ||
-	    (params != NULL && strstr(params, "trusted") != 0))
-		providers[active_providers - 1].trusted = 1;
-
-	memcpy(&providers[active_providers - 1].info, &info, sizeof(info));
 
 	return 0;
 }
@@ -401,17 +487,11 @@ cleanup:
 int gnutls_pkcs11_add_provider(const char *name, const char *params)
 {
 	struct ck_function_list *module;
-	unsigned custom_init = 0, flags = 0;
-	struct ck_c_initialize_args args;
-	const char *p;
+	struct gnutls_pkcs11_provider_st provider;
+	int flags = 0;
 	int ret;
 
-	if (params && (p = strstr(params, "p11-kit:")) != 0) {
-		memset(&args, 0, sizeof(args));
-		args.reserved = (char *)(p + sizeof("p11-kit:") - 1);
-		args.flags = CKF_OS_LOCKING_OK;
-
-		custom_init = 1;
+	if (params && strstr(params, "p11-kit:") != NULL) {
 		flags = P11_KIT_MODULE_UNMANAGED;
 	}
 
@@ -422,30 +502,18 @@ int gnutls_pkcs11_add_provider(const char *name, const char *params)
 		return GNUTLS_E_PKCS11_LOAD_ERROR;
 	}
 
-	_gnutls_debug_log("p11: Initializing module: %s\n", name);
-
-	/* check if we have special information for a p11-kit trust module */
-	if (custom_init) {
-		ret = module->C_Initialize(&args);
-	} else {
-		ret = p11_kit_module_initialize(module);
-	}
-
-	if (ret != CKR_OK) {
+	ret = pkcs11_provider_init(&provider, module, name, params);
+	if (ret != 0) {
 		p11_kit_module_release(module);
 		gnutls_assert();
-		return pkcs11_rv_to_err(ret);
+		return ret;
 	}
 
-	ret = pkcs11_add_module(name, module, custom_init, params);
+	ret = pkcs11_provider_add(&provider);
 	if (ret != 0) {
 		if (ret == GNUTLS_E_INT_RET_0)
 			ret = 0;
-		if (!custom_init)
-			p11_kit_module_finalize(module);
-		else
-			module->C_Finalize(NULL);
-		p11_kit_module_release(module);
+		pkcs11_provider_deinit(&provider);
 		gnutls_assert();
 	}
 
@@ -893,32 +961,34 @@ static int init = 0;
  */
 static void compat_load(const char *configfile)
 {
-	FILE *fp;
 	int ret;
-	char line[512];
 	const char *library;
+	gnutls_datum_t data;
+	char *str, *savep;
 
 	if (configfile == NULL)
 		configfile = "/etc/gnutls/pkcs11.conf";
 
-	fp = fopen(configfile, "re");
-	if (fp == NULL) {
-		gnutls_assert();
+	_gnutls_debug_log("Loading PKCS #11 libraries from %s\n", configfile);
+
+	ret = gnutls_load_file(configfile, &data);
+	if (ret < 0) {
+		_gnutls_debug_log("Could not load %s: %s\n", configfile,
+				  gnutls_strerror(ret));
 		return;
 	}
 
-	_gnutls_debug_log("Loading PKCS #11 libraries from %s\n", configfile);
-	while (fgets(line, sizeof(line), fp) != NULL) {
+	for (str = (char *)data.data;; str = NULL) {
+		char *line = strtok_r(str, "\n", &savep);
+		if (line == NULL)
+			break;
 		if (strncmp(line, "load", sizeof("load") - 1) == 0) {
 			char *p;
 			p = strchr(line, '=');
 			if (p == NULL)
 				continue;
 
-			library = ++p;
-			p = strchr(line, '\n');
-			if (p != NULL)
-				*p = 0;
+			library = p + 1;
 
 			ret = gnutls_pkcs11_add_provider(library, NULL);
 			if (ret < 0) {
@@ -929,36 +999,45 @@ static void compat_load(const char *configfile)
 			}
 		}
 	}
-	fclose(fp);
-
-	return;
+	gnutls_free(data.data);
 }
 
 static int auto_load(unsigned trusted)
 {
 	struct ck_function_list **modules;
 	int i, ret;
-	char *name;
 
-	modules = p11_kit_modules_load_and_initialize(
-		trusted ? P11_KIT_MODULE_TRUSTED : 0);
+	modules = p11_kit_modules_load(NULL,
+				       trusted ? P11_KIT_MODULE_TRUSTED : 0);
 	if (modules == NULL) {
 		gnutls_assert();
-		_gnutls_debug_log("Cannot initialize registered modules: %s\n",
+		_gnutls_debug_log("Cannot load registered modules: %s\n",
 				  p11_kit_message());
 		return GNUTLS_E_PKCS11_LOAD_ERROR;
 	}
 
 	for (i = 0; modules[i] != NULL; i++) {
-		name = p11_kit_module_get_name(modules[i]);
-		_gnutls_debug_log("p11: Initializing module: %s\n", name);
+		struct gnutls_pkcs11_provider_st provider;
+		char *name = p11_kit_module_get_name(modules[i]);
 
-		ret = pkcs11_add_module(name, modules[i], 0, NULL);
+		ret = pkcs11_provider_init(&provider, modules[i], name, NULL);
 		if (ret < 0) {
 			gnutls_assert();
-			_gnutls_debug_log("Cannot load PKCS #11 module: %s\n",
-					  name);
+			_gnutls_debug_log(
+				"Cannot initialize PKCS #11 module: %s\n",
+				name);
+			goto next;
 		}
+
+		ret = pkcs11_provider_add(&provider);
+		if (ret < 0) {
+			gnutls_assert();
+			_gnutls_debug_log("Cannot add PKCS #11 module: %s\n",
+					  name);
+			pkcs11_provider_deinit(&provider);
+			goto next;
+		}
+	next:
 		free(name);
 	}
 
@@ -1035,7 +1114,8 @@ static int _gnutls_pkcs11_reinit(void)
 
 	for (i = 0; i < active_providers; i++) {
 		if (providers[i].module != NULL) {
-			rv = p11_kit_module_initialize(providers[i].module);
+			rv = providers[i].module->C_Initialize(
+				&providers[i].init_args);
 			if (rv == CKR_OK ||
 			    rv == CKR_CRYPTOKI_ALREADY_INITIALIZED) {
 				providers[i].active = 1;
@@ -1104,13 +1184,7 @@ void gnutls_pkcs11_deinit(void)
 		return;
 
 	for (i = 0; i < active_providers; i++) {
-		if (providers[i].active) {
-			if (!providers[i].custom_init)
-				p11_kit_module_finalize(providers[i].module);
-			else
-				providers[i].module->C_Finalize(NULL);
-		}
-		p11_kit_module_release(providers[i].module);
+		pkcs11_provider_deinit(&providers[i]);
 	}
 	active_providers = 0;
 	providers_initialized = PROV_UNINITIALIZED;
@@ -1281,6 +1355,8 @@ void gnutls_pkcs11_obj_deinit(gnutls_pkcs11_obj_t obj)
 	unsigned i;
 	for (i = 0; i < obj->pubkey_size; i++)
 		_gnutls_free_datum(&obj->pubkey[i]);
+	for (i = 0; i < obj->privkey_size; i++)
+		_gnutls_free_datum(&obj->privkey_type[i]);
 	_gnutls_free_datum(&obj->raw);
 	p11_kit_uri_free(obj->info);
 	free(obj);
@@ -1900,17 +1976,11 @@ int pkcs11_read_pubkey(struct ck_function_list *module, ck_session_handle_t pks,
 		    CKR_OK) {
 			gnutls_ecc_curve_t curve;
 			const gnutls_ecc_curve_entry_st *ce;
+			gnutls_datum_t temp_datum = { a[0].value,
+						      a[0].value_len };
 
-			pobj->pubkey[0].data = a[0].value;
-			pobj->pubkey[0].size = a[0].value_len;
-
-			pobj->pubkey[1].data = a[1].value;
-			pobj->pubkey[1].size = a[1].value_len;
-
-			pobj->pubkey_size = 2;
-
-			ret = _gnutls_pubkey_parse_ecc_eddsa_params(
-				&pobj->pubkey[0], &curve);
+			ret = _gnutls_pubkey_parse_ecc_eddsa_params(&temp_datum,
+								    &curve);
 			if (ret < 0) {
 				ret = GNUTLS_E_INVALID_REQUEST;
 				goto cleanup;
@@ -1920,6 +1990,11 @@ int pkcs11_read_pubkey(struct ck_function_list *module, ck_session_handle_t pks,
 				ret = GNUTLS_E_INVALID_REQUEST;
 				goto cleanup;
 			}
+			pobj->pubkey[0].data = a[0].value;
+			pobj->pubkey[0].size = a[0].value_len;
+			pobj->pubkey[1].data = a[1].value;
+			pobj->pubkey[1].size = a[1].value_len;
+			pobj->pubkey_size = 2;
 			pobj->pk_algorithm = ce->pk;
 		} else {
 			gnutls_assert();
@@ -1946,24 +2021,204 @@ cleanup:
 	return ret;
 }
 
-static int
-pkcs11_obj_import_pubkey(struct ck_function_list *module,
-			 ck_session_handle_t pks, ck_object_handle_t ctx,
-			 gnutls_pkcs11_obj_t pobj, gnutls_datum_t *data,
-			 const gnutls_datum_t *id, const gnutls_datum_t *label,
-			 struct ck_token_info *tinfo, struct ck_info *lib_info)
+static int pkcs11_read_privkey_type(struct ck_function_list *module,
+				    ck_session_handle_t pks,
+				    ck_object_handle_t ctx,
+				    ck_key_type_t key_type,
+				    gnutls_pkcs11_obj_t pobj)
+{
+	struct ck_attribute a[2];
+	uint8_t *tmp1;
+	uint8_t *tmp2 = NULL;
+	size_t tmp1_size, tmp2_size;
+	int ret;
+	ck_rv_t rv;
+
+	pobj->pk_algorithm = GNUTLS_PK_UNKNOWN;
+	tmp1_size = tmp2_size = MAX_PK_PARAM_SIZE;
+	tmp1 = gnutls_calloc(1, tmp1_size);
+	if (tmp1 == NULL)
+		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+
+	switch (key_type) {
+	case CKK_RSA:
+		a[0].type = CKA_MODULUS;
+		a[0].value = tmp1;
+		a[0].value_len = tmp1_size;
+
+		if (pkcs11_get_attribute_value(module, pks, ctx, a, 1) ==
+		    CKR_OK) {
+			pobj->privkey_type[0].data = a[0].value;
+			pobj->privkey_type[0].size = a[0].value_len;
+
+			pobj->privkey_size = 1;
+			pobj->pk_algorithm = GNUTLS_PK_RSA;
+		} else {
+			gnutls_assert();
+			ret = GNUTLS_E_PKCS11_ERROR;
+			goto cleanup;
+		}
+		break;
+	case CKK_DSA:
+		tmp2 = gnutls_calloc(1, tmp2_size);
+		if (tmp2 == NULL) {
+			ret = gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+			goto cleanup;
+		}
+
+		a[0].type = CKA_PRIME;
+		a[0].value = tmp1;
+		a[0].value_len = tmp1_size;
+		a[1].type = CKA_SUBPRIME;
+		a[1].value = tmp2;
+		a[1].value_len = tmp2_size;
+
+		if ((rv = pkcs11_get_attribute_value(module, pks, ctx, a, 2)) ==
+		    CKR_OK) {
+			if ((ret = _gnutls_set_datum(&pobj->privkey_type[0],
+						     a[0].value,
+						     a[0].value_len)) < 0 ||
+			    (ret = _gnutls_set_datum(&pobj->privkey_type[1],
+						     a[1].value,
+						     a[1].value_len)) < 0) {
+				gnutls_assert();
+				_gnutls_free_datum(&pobj->privkey_type[1]);
+				_gnutls_free_datum(&pobj->privkey_type[0]);
+				goto cleanup;
+			}
+
+			pobj->privkey_size = 2;
+		} else {
+			gnutls_assert();
+			ret = pkcs11_rv_to_err(rv);
+			goto cleanup;
+		}
+
+		a[0].type = CKA_BASE;
+		a[0].value = tmp1;
+		a[0].value_len = tmp1_size;
+		a[1].type = CKA_VALUE;
+		a[1].value = tmp2;
+		a[1].value_len = tmp2_size;
+
+		if ((rv = pkcs11_get_attribute_value(module, pks, ctx, a, 2)) ==
+		    CKR_OK) {
+			pobj->privkey_type[2].data = a[0].value;
+			pobj->privkey_type[2].size = a[0].value_len;
+
+			pobj->privkey_type[3].data = a[1].value;
+			pobj->privkey_type[3].size = a[1].value_len;
+
+			pobj->privkey_size = 4;
+			pobj->pk_algorithm = GNUTLS_PK_DSA;
+		} else {
+			gnutls_assert();
+			_gnutls_free_datum(&pobj->privkey_type[1]);
+			_gnutls_free_datum(&pobj->privkey_type[0]);
+			ret = pkcs11_rv_to_err(rv);
+			goto cleanup;
+		}
+		break;
+	case CKK_ECDSA:
+		a[0].type = CKA_EC_PARAMS;
+		a[0].value = tmp1;
+		a[0].value_len = tmp1_size;
+
+		if ((rv = pkcs11_get_attribute_value(module, pks, ctx, a, 1)) ==
+		    CKR_OK) {
+			pobj->privkey_type[0].data = a[0].value;
+			pobj->privkey_type[0].size = a[0].value_len;
+
+			pobj->privkey_size = 1;
+			pobj->pk_algorithm = GNUTLS_PK_EC;
+		} else {
+			gnutls_assert();
+			ret = pkcs11_rv_to_err(rv);
+			goto cleanup;
+		}
+
+		break;
+#ifdef HAVE_PKCS11_EDDSA
+	case CKK_EC_EDWARDS:
+		a[0].type = CKA_EC_PARAMS;
+		a[0].value = tmp1;
+		a[0].value_len = tmp1_size;
+
+		if ((rv = pkcs11_get_attribute_value(module, pks, ctx, a, 1)) ==
+		    CKR_OK) {
+			gnutls_ecc_curve_t curve;
+			const gnutls_ecc_curve_entry_st *ce;
+			gnutls_datum_t temp_datum = { a[0].value,
+						      a[0].value_len };
+
+			ret = _gnutls_pubkey_parse_ecc_eddsa_params(&temp_datum,
+								    &curve);
+			if (ret < 0) {
+				ret = GNUTLS_E_INVALID_REQUEST;
+				goto cleanup;
+			}
+			ce = _gnutls_ecc_curve_get_params(curve);
+			if (unlikely(ce == NULL)) {
+				ret = GNUTLS_E_INVALID_REQUEST;
+				goto cleanup;
+			}
+			pobj->privkey_type[0].data = a[0].value;
+			pobj->privkey_type[0].size = a[0].value_len;
+			pobj->privkey_size = 1;
+			pobj->pk_algorithm = ce->pk;
+		} else {
+			gnutls_assert();
+
+			ret = pkcs11_rv_to_err(rv);
+			goto cleanup;
+		}
+		break;
+#endif
+	default:
+		_gnutls_debug_log(
+			"requested reading private key of unsupported type %u\n",
+			(unsigned)key_type);
+		ret = gnutls_assert_val(GNUTLS_E_UNIMPLEMENTED_FEATURE);
+		goto cleanup;
+	}
+
+	return 0;
+
+cleanup:
+	gnutls_free(tmp1);
+	gnutls_free(tmp2);
+
+	return ret;
+}
+
+static int pkcs11_obj_import_pubkey_privkey(
+	struct ck_function_list *module, ck_session_handle_t pks,
+	ck_object_handle_t ctx, gnutls_pkcs11_obj_t pobj, gnutls_datum_t *data,
+	const gnutls_datum_t *id, const gnutls_datum_t *label,
+	struct ck_token_info *tinfo, struct ck_info *lib_info,
+	ck_object_class_t class)
 {
 	struct ck_attribute a[4];
 	ck_key_type_t key_type;
 	int ret;
 	ck_bool_t tval;
 
+	if (class != CKO_PUBLIC_KEY && class != CKO_PRIVATE_KEY)
+		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+
 	a[0].type = CKA_KEY_TYPE;
 	a[0].value = &key_type;
 	a[0].value_len = sizeof(key_type);
 
 	if (pkcs11_get_attribute_value(module, pks, ctx, a, 1) == CKR_OK) {
-		ret = pkcs11_read_pubkey(module, pks, ctx, key_type, pobj);
+		// For private keys we only read the key type metadata
+		if (class == CKO_PUBLIC_KEY) {
+			ret = pkcs11_read_pubkey(module, pks, ctx, key_type,
+						 pobj);
+		} else {
+			ret = pkcs11_read_privkey_type(module, pks, ctx,
+						       key_type, pobj);
+		}
 		if (ret < 0)
 			return gnutls_assert_val(ret);
 	}
@@ -2025,8 +2280,7 @@ pkcs11_obj_import_pubkey(struct ck_function_list *module,
 		}
 	}
 
-	ret = pkcs11_obj_import(CKO_PUBLIC_KEY, pobj, data, id, label, tinfo,
-				lib_info);
+	ret = pkcs11_obj_import(class, pobj, data, id, label, tinfo, lib_info);
 	return ret;
 }
 
@@ -2171,10 +2425,11 @@ static int pkcs11_import_object(ck_object_handle_t ctx, ck_object_class_t class,
 		/* data will be null */
 	}
 
-	if (class == CKO_PUBLIC_KEY) {
-		ret = pkcs11_obj_import_pubkey(sinfo->module, sinfo->pks, ctx,
-					       pobj, &data, &id, &label, tinfo,
-					       lib_info);
+	if (class == CKO_PUBLIC_KEY || class == CKO_PRIVATE_KEY) {
+		ret = pkcs11_obj_import_pubkey_privkey(sinfo->module,
+						       sinfo->pks, ctx, pobj,
+						       &data, &id, &label,
+						       tinfo, lib_info, class);
 	} else {
 		ret = pkcs11_obj_import(class, pobj, &data, &id, &label, tinfo,
 					lib_info);
@@ -3614,6 +3869,7 @@ int gnutls_x509_crt_list_import_pkcs11(gnutls_x509_crt_t *certs,
 cleanup:
 	for (j = 0; j < i; j++) {
 		gnutls_x509_crt_deinit(certs[j]);
+		certs[j] = NULL;
 	}
 
 	return ret;
@@ -4103,7 +4359,7 @@ static int find_cert_cb(struct ck_function_list *module,
 	else
 		tries = 1;
 
-	now = gnutls_time(0);
+	now = gnutls_time(NULL);
 	for (i = 0; i < tries; i++) {
 		a_vals = 0;
 		class = CKO_CERTIFICATE;
@@ -4890,4 +5146,112 @@ cleanup:
 	gnutls_free(priv.serial.data);
 
 	return ret;
+}
+
+/**
+ * gnutls_pkcs11_obj_get_pk_algorithm:
+ * @obj: The pkcs11 object
+ * @bits: Will hold the rsa/dsa bit count or the ecc curve
+ * This function given a pkcs11 object with privkey_type initialized,
+ * will return the algorithm type on success , and will store the number
+ * of bits if the algo type is %GNUTLS_PK_RSA or %GNUTLS_PK_DSA, or the curve
+ * if the algo type is %GNUTLS_PK_ECDSA.
+ *
+ * The return value needs to be checked to determine if bits represents
+ * the ecc curve or the number of bits.
+ *
+ * Returns: The private key algorithm associated with the object on success
+ * or a an error code otherwise.
+ *
+ * Since: 3.8.13
+ **/
+int gnutls_pkcs11_obj_get_pk_algorithm(gnutls_pkcs11_obj_t obj,
+				       unsigned int *bits)
+{
+	gnutls_pk_algorithm_t pk;
+	gnutls_pk_params_st temp_params;
+	int ret;
+	int curve_len;
+	char oid_string[128] = { 0 };
+	if (!obj || !bits)
+		return GNUTLS_E_INVALID_REQUEST;
+
+	if (obj->type != GNUTLS_PKCS11_OBJ_PRIVKEY) {
+		return GNUTLS_E_UNIMPLEMENTED_FEATURE;
+	}
+
+	// first make sure privkey_type is properly populated
+	for (unsigned i = 0; i < obj->privkey_size; i++) {
+		if (obj->privkey_type[i].data == NULL ||
+		    obj->privkey_type[i].size == 0) {
+			return GNUTLS_E_INVALID_REQUEST;
+		}
+	}
+
+	pk = obj->pk_algorithm;
+
+	switch (pk) {
+	case GNUTLS_PK_RSA:
+		*bits = obj->privkey_type[0].size * 8;
+		return pk;
+	case GNUTLS_PK_DSA:
+		gnutls_pk_params_init(&temp_params);
+		if (_gnutls_mpi_init_scan_nz(&temp_params.params[DSA_P],
+					     obj->privkey_type[0].data,
+					     obj->privkey_type[0].size)) {
+			gnutls_assert();
+			ret = GNUTLS_E_MPI_SCAN_FAILED;
+			goto dsa_cleanup;
+		}
+
+		if (_gnutls_mpi_init_scan_nz(&temp_params.params[DSA_Q],
+					     obj->privkey_type[1].data,
+					     obj->privkey_type[1].size)) {
+			gnutls_assert();
+			ret = GNUTLS_E_MPI_SCAN_FAILED;
+			goto dsa_cleanup;
+		}
+
+		if (_gnutls_mpi_init_scan_nz(&temp_params.params[DSA_G],
+					     obj->privkey_type[2].data,
+					     obj->privkey_type[2].size)) {
+			gnutls_assert();
+			ret = GNUTLS_E_MPI_SCAN_FAILED;
+			goto dsa_cleanup;
+		}
+
+		if (_gnutls_mpi_init_scan_nz(&temp_params.params[DSA_Y],
+					     obj->privkey_type[3].data,
+					     obj->privkey_type[3].size)) {
+			gnutls_assert();
+			ret = GNUTLS_E_MPI_SCAN_FAILED;
+			goto dsa_cleanup;
+		}
+
+		temp_params.params_nr = DSA_PUBLIC_PARAMS;
+		temp_params.algo = GNUTLS_PK_DSA;
+		*bits = pubkey_to_bits(&temp_params);
+		ret = pk;
+
+	dsa_cleanup:
+		gnutls_pk_params_release(&temp_params);
+		return ret;
+
+	case GNUTLS_PK_ECDSA:
+	case GNUTLS_PK_EDDSA_ED25519:
+		ret = asn1_get_object_id_der(obj->privkey_type[0].data + 1,
+					     obj->privkey_type[0].size - 1,
+					     &curve_len, oid_string,
+					     sizeof(oid_string));
+		if (ret != ASN1_SUCCESS) {
+			gnutls_assert();
+			return _gnutls_asn2err(ret);
+		}
+		*bits = gnutls_oid_to_ecc_curve(oid_string);
+		return pk;
+
+	default:
+		gnutls_assert();
+		return GNUTLS_E_UNKNOWN_PK_ALGORITHM;
+	}
 }

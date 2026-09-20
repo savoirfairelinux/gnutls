@@ -87,6 +87,24 @@ static const char rsa_2048_sig[] =
 	"\xef\x62\x18\x39\x7a\x50\x01\x46\x1b\xde\x8d\x37\xbc\x90\x6c\x07"
 	"\xc0\x07\xed\x60\xce\x2e\x31\xd6\x8f\xe8\x75\xdb\x45\x21\xc6\xcb";
 
+static const char rsa_pss_2048_sig[] =
+	"\x28\x77\x99\x8b\xc6\xe2\x59\x5c\xa5\x5c\x30\x78\x13\xe2\xca\xe1"
+	"\x13\xf5\x5d\xd5\x9a\xd7\x71\xff\x41\x82\xf4\x61\xda\x3a\xb6\x10"
+	"\x20\x87\x63\x5a\x7e\x4e\xc2\x5e\xb1\x85\x0f\x84\x58\xa3\x27\x2d"
+	"\xe5\x03\xcf\x65\x1a\xb2\xe6\x8b\xcc\x28\xd8\xcc\x1a\x64\x2a\x2d"
+	"\x9a\x0b\xb7\x32\xfe\x03\x57\x8c\xa0\x9b\xf5\xd0\x51\xb5\x6c\x65"
+	"\xfe\xf9\xf3\xa4\xba\x09\x43\x80\x31\xc1\x02\x88\x78\xaa\x65\x87"
+	"\x8d\xb8\x51\xba\x76\x57\xa6\x55\x18\x45\x95\x4e\x22\x82\xb6\xfd"
+	"\xc9\x04\xf9\xb0\x56\x24\x31\x84\x2b\x70\x91\x55\x7d\x05\x1a\xd0"
+	"\x30\xae\x5c\xfd\x11\x0a\x2e\x86\x09\x05\x44\x9a\xb5\xaf\x30\x8a"
+	"\xb6\xa8\x65\x54\xaf\xdf\xf8\x9a\xca\xa0\x96\x26\x45\x09\x41\x33"
+	"\xf3\x44\x71\xe1\x31\x31\x4c\x53\x60\xcb\x7f\x0b\x02\x08\x39\xf9"
+	"\xe4\xb2\x43\xa6\x07\x1b\x7e\x15\x32\x36\x3d\xc6\x78\x0b\xf1\x9a"
+	"\x33\xe3\xee\x8c\x48\xd4\x7e\xcb\xd1\xe6\x93\x29\x13\x04\x40\x8c"
+	"\x72\xc6\x39\xab\xa1\x76\x4e\x87\x3b\x91\x06\xdf\x1d\x1e\x07\x5e"
+	"\xc2\x26\x7c\xd6\x38\x5d\xba\x9b\x50\x38\x44\x63\x91\x2a\x98\xd2"
+	"\x30\x3f\xfb\x79\x15\x5f\x2e\xd2\x3f\xb7\xc4\x69\xc2\x2d\x79\x8d";
+
 #ifdef ENABLE_DSA
 /* DSA 2048 private key and signature */
 static const char dsa_2048_privkey[] =
@@ -223,6 +241,35 @@ static const char gost12_512_privkey[] =
 	"B0vdc7u59b99TCNXhHiB69JJtUjvieNkGYJpoaaIvoKZTNCjpSZASsZcQZCHOTof\n"
 	"hsQ3JCCy4xnd5jWT\n"
 	"-----END PRIVATE KEY-----\n";
+
+/* ed25519 private key and signature */
+static const char eddsa_ed25519_privkey[] =
+	"-----BEGIN PRIVATE KEY-----\n"
+	"MC4CAQAwBQYDK2VwBCIEIH4WeqmZGZQlSY/8H85ZZimVd26h6I68gFNyBvyh3Vcy\n"
+	"-----END PRIVATE KEY-----\n";
+
+static const char eddsa_ed25519_sig[] =
+	"\xd1\xcb\x06\x1e\x22\xf2\xec\x56\xa6\xe6\xb3\x89\xb6\x1c\xcf\x13"
+	"\x95\x53\x3d\x12\x27\xea\x32\xfd\x5b\xe6\x5f\x24\xc9\xd0\xa9\x21"
+	"\x36\x63\x06\x20\xe4\xaf\xb1\x36\xc5\x21\x5c\xaa\xdc\x89\x62\xfa"
+	"\xc6\x4c\xea\x42\xd7\xd8\x39\x81\x46\x9f\x41\x09\x10\x94\x9f\x07";
+
+/* ed448 private key and signature */
+static const char eddsa_ed448_privkey[] =
+	"-----BEGIN PRIVATE KEY-----\n"
+	"MEcCAQAwBQYDK2VxBDsEOcUwM3PlIVddDpjHbTANVDGN82jtXJNMbq1oy5u5iJTe\n"
+	"dXGSbQ0e1N/7o1wIO+fKUR1G/CbcXu+XFQ==\n"
+	"-----END PRIVATE KEY-----\n";
+
+static const char eddsa_ed448_sig[] =
+	"\xe3\x13\x89\xef\x7d\x63\x93\xcf\x15\xfb\xe4\x98\x9d\x24\xec\x56"
+	"\xbe\xfc\xcd\xfd\xad\x54\xb3\x8b\xfb\x96\x1b\x08\xbe\xbe\xf0\xc4"
+	"\xff\x67\xf9\x3d\x57\x4a\x2e\x8c\x9c\x39\x83\x5b\x22\xab\x91\x1e"
+	"\x71\x23\x79\xba\x30\xaa\x6d\xbe\x80\xf7\xef\x59\xa5\x3b\xe3\xdf"
+	"\xba\x59\x29\xfe\xe2\xc5\xd2\xb4\xe4\xb5\x94\x2f\x2b\xad\xd9\x20"
+	"\xdc\x25\x75\xbb\xed\xc4\xdb\x72\x22\x6d\x79\x42\x27\xb3\xd9\x8c"
+	"\x80\x68\xd8\x75\x0c\x1c\x6a\xd7\x28\x01\x03\x29\xd0\x7e\x04\x65"
+	"\x2a\x00";
 
 static int test_rsa_enc(gnutls_pk_algorithm_t pk, unsigned bits,
 			gnutls_digest_algorithm_t dig)
@@ -503,9 +550,11 @@ static int test_known_sig(gnutls_pk_algorithm_t pk, unsigned bits,
 	gnutls_privkey_t key;
 	char param_name[32];
 	unsigned vflags = 0;
+	gnutls_x509_spki_t spki = NULL;
 
 	if (pk == GNUTLS_PK_EC || pk == GNUTLS_PK_GOST_01 ||
-	    pk == GNUTLS_PK_GOST_12_256 || pk == GNUTLS_PK_GOST_12_512) {
+	    pk == GNUTLS_PK_GOST_12_256 || pk == GNUTLS_PK_GOST_12_512 ||
+	    pk == GNUTLS_PK_EDDSA_ED25519 || pk == GNUTLS_PK_EDDSA_ED448) {
 		snprintf(param_name, sizeof(param_name), "%s",
 			 gnutls_ecc_curve_get_name(GNUTLS_BITS_TO_CURVE(bits)));
 		if (dig == GNUTLS_DIG_GOSTR_94)
@@ -532,6 +581,22 @@ static int test_known_sig(gnutls_pk_algorithm_t pk, unsigned bits,
 	if (ret < 0) {
 		gnutls_assert();
 		goto cleanup;
+	}
+
+	if (pk == GNUTLS_PK_RSA_PSS) {
+		ret = gnutls_x509_spki_init(&spki);
+		if (ret < 0) {
+			gnutls_assert();
+			goto cleanup;
+		}
+
+		gnutls_x509_spki_set_rsa_pss_params(spki, dig, 32);
+
+		ret = gnutls_privkey_set_spki(key, spki, 0);
+		if (ret < 0) {
+			gnutls_assert();
+			goto cleanup;
+		}
 	}
 
 	if (pk != (unsigned)gnutls_privkey_get_pk_algorithm(key, NULL)) {
@@ -585,24 +650,30 @@ static int test_known_sig(gnutls_pk_algorithm_t pk, unsigned bits,
 		goto cleanup;
 	}
 
-	/* Test if a broken signature will cause verification error */
+	/* Test if a broken signature will cause verification
+	 * error. As this is not part of known-answer test, only
+	 * exercised when GNUTLS_SELF_TEST_FLAG_ALL is set. */
+	if (flags & GNUTLS_SELF_TEST_FLAG_ALL) {
+		ret = gnutls_pubkey_verify_data2(pub,
+						 gnutls_pk_to_sign(pk, dig),
+						 vflags, &bad_data, &sig);
 
-	ret = gnutls_pubkey_verify_data2(pub, gnutls_pk_to_sign(pk, dig), 0,
-					 &bad_data, &sig);
-
-	if (ret != GNUTLS_E_PK_SIG_VERIFY_FAILED) {
-		ret = GNUTLS_E_SELF_TEST_ERROR;
-		gnutls_assert();
-		goto cleanup;
+		if (ret != GNUTLS_E_PK_SIG_VERIFY_FAILED) {
+			ret = GNUTLS_E_SELF_TEST_ERROR;
+			gnutls_assert();
+			goto cleanup;
+		}
 	}
 
 	ret = 0;
 
 cleanup:
-	gnutls_free(sig.data);
-	if (pub != 0)
+	if (spki != NULL)
+		gnutls_x509_spki_deinit(spki);
+	if (pub != NULL)
 		gnutls_pubkey_deinit(pub);
 	gnutls_privkey_deinit(key);
+	gnutls_free(sig.data);
 
 	if (ret == 0)
 		_gnutls_debug_log("%s-%s-known-sig self test succeeded\n",
@@ -996,8 +1067,17 @@ int gnutls_pk_self_test(unsigned flags, gnutls_pk_algorithm_t pk)
 
 		FALLTHROUGH;
 	case GNUTLS_PK_RSA_PSS:
-		PK_TEST(GNUTLS_PK_RSA_PSS, test_sig, 2048,
-			GNUTLS_SIGN_RSA_PSS_RSAE_SHA256);
+		/* In POST, we switch the RNG to deterministic one so
+		 * the KAT for RSA-PSS work. */
+		if (is_post) {
+			PK_KNOWN_TEST(GNUTLS_PK_RSA_PSS, 2048,
+				      GNUTLS_DIG_SHA256, rsa_2048_privkey,
+				      rsa_pss_2048_sig,
+				      GNUTLS_PRIVKEY_SIGN_FLAG_RSA_PSS);
+		} else {
+			PK_TEST(GNUTLS_PK_RSA_PSS, test_sig, 2048,
+				GNUTLS_SIGN_RSA_PSS_RSAE_SHA256);
+		}
 
 		if (!(flags & GNUTLS_SELF_TEST_FLAG_ALL))
 			return 0;
@@ -1144,6 +1224,26 @@ int gnutls_pk_self_test(unsigned flags, gnutls_pk_algorithm_t pk)
 		if (!(flags & GNUTLS_SELF_TEST_FLAG_ALL))
 			return 0;
 #endif
+		FALLTHROUGH;
+	case GNUTLS_PK_EDDSA_ED25519:
+		PK_KNOWN_TEST(GNUTLS_PK_EDDSA_ED25519,
+			      GNUTLS_CURVE_TO_BITS(GNUTLS_ECC_CURVE_ED25519),
+			      GNUTLS_DIG_SHA512, eddsa_ed25519_privkey,
+			      eddsa_ed25519_sig, 0);
+
+		if (!(flags & GNUTLS_SELF_TEST_FLAG_ALL))
+			return 0;
+
+		FALLTHROUGH;
+	case GNUTLS_PK_EDDSA_ED448:
+		PK_KNOWN_TEST(GNUTLS_PK_EDDSA_ED448,
+			      GNUTLS_CURVE_TO_BITS(GNUTLS_ECC_CURVE_ED448),
+			      GNUTLS_DIG_SHAKE_256, eddsa_ed448_privkey,
+			      eddsa_ed448_sig, 0);
+
+		if (!(flags & GNUTLS_SELF_TEST_FLAG_ALL))
+			return 0;
+
 		break;
 	default:
 		return gnutls_assert_val(GNUTLS_E_NO_SELF_TEST);

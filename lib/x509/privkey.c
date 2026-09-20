@@ -324,6 +324,126 @@ error:
 	return ret;
 }
 
+static int decode_ml_dsa_key(asn1_node *pkey_asn, const gnutls_datum_t *raw_key,
+			     gnutls_x509_privkey_t pkey)
+{
+	int result, ret;
+	unsigned int version;
+	char oid[MAX_OID_SIZE];
+	int oid_size;
+	size_t raw_pub_size, raw_priv_size;
+
+	result = _asn1_strict_der_decode(pkey_asn, raw_key->data, raw_key->size,
+					 NULL);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(result);
+	}
+
+	ret = _gnutls_x509_read_uint(*pkey_asn, "version", &version);
+	if (ret < 0) {
+		gnutls_assert();
+		return ret;
+	}
+
+	oid_size = sizeof(oid);
+	result = asn1_read_value(*pkey_asn, "privateKeyAlgorithm.algorithm",
+				 oid, &oid_size);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(result);
+	}
+
+	pkey->params.algo = gnutls_oid_to_pk(oid);
+
+	switch (pkey->params.algo) {
+	case GNUTLS_PK_MLDSA44:
+		raw_priv_size = MLDSA44_PRIVKEY_SIZE;
+		raw_pub_size = MLDSA44_PUBKEY_SIZE;
+		break;
+	case GNUTLS_PK_MLDSA65:
+		raw_priv_size = MLDSA65_PRIVKEY_SIZE;
+		raw_pub_size = MLDSA65_PUBKEY_SIZE;
+		break;
+	case GNUTLS_PK_MLDSA87:
+		raw_priv_size = MLDSA87_PRIVKEY_SIZE;
+		raw_pub_size = MLDSA87_PUBKEY_SIZE;
+		break;
+	default:
+		return gnutls_assert_val(
+			GNUTLS_E_UNSUPPORTED_SIGNATURE_ALGORITHM);
+	}
+
+	ret = _gnutls_x509_read_value(*pkey_asn, "privateKey",
+				      &pkey->params.raw_priv);
+	if (ret < 0) {
+		gnutls_assert();
+		return ret;
+	}
+
+	switch (version) {
+	case 0:
+		/* if version is 0, public key is embedded in
+		 * privateKey field, concatenated after a private
+		 * key */
+		if (pkey->params.raw_priv.size != raw_priv_size + raw_pub_size)
+			return gnutls_assert_val(GNUTLS_E_ASN1_DER_ERROR);
+		ret = _gnutls_set_datum(
+			&pkey->params.raw_pub,
+			&pkey->params.raw_priv.data[raw_priv_size],
+			raw_pub_size);
+		if (ret < 0) {
+			gnutls_assert();
+			return ret;
+		}
+		pkey->params.raw_priv.size = raw_priv_size;
+		break;
+	case 1:
+		/* if version is 1, public key is embedded in a
+		 * separate field */
+		ret = _gnutls_x509_read_value(*pkey_asn, "publicKey",
+					      &pkey->params.raw_pub);
+		if (ret < 0) {
+			gnutls_assert();
+			return ret;
+		}
+		break;
+	default:
+		return gnutls_assert_val(GNUTLS_E_ASN1_DER_ERROR);
+	}
+
+	if (pkey->params.raw_pub.size != raw_pub_size ||
+	    pkey->params.raw_priv.size != raw_priv_size)
+		return gnutls_assert_val(GNUTLS_E_ASN1_DER_ERROR);
+
+	return GNUTLS_E_SUCCESS;
+}
+
+static int _gnutls_privkey_decode_ml_dsa_key(asn1_node *pkey_asn,
+					     const gnutls_datum_t *raw_key,
+					     gnutls_x509_privkey_t pkey)
+{
+	int result;
+
+	gnutls_pk_params_init(&pkey->params);
+
+	if ((result = asn1_create_element(_gnutls_get_gnutls_asn(),
+					  "GNUTLS.MLDSAPrivateKey",
+					  pkey_asn)) != ASN1_SUCCESS) {
+		gnutls_assert();
+		return _gnutls_asn2err(result);
+	}
+
+	result = decode_ml_dsa_key(pkey_asn, raw_key, pkey);
+	asn1_delete_structure2(pkey_asn, ASN1_DELETE_FLAG_ZEROIZE);
+	if (result < 0) {
+		gnutls_pk_params_clear(&pkey->params);
+		gnutls_pk_params_release(&pkey->params);
+	}
+
+	return result;
+}
+
 static asn1_node decode_dsa_key(const gnutls_datum_t *raw_key,
 				gnutls_x509_privkey_t pkey)
 {
@@ -408,6 +528,7 @@ error:
 #define PEM_KEY_DSA "DSA PRIVATE KEY"
 #define PEM_KEY_RSA "RSA PRIVATE KEY"
 #define PEM_KEY_ECC "EC PRIVATE KEY"
+#define PEM_KEY_ML_DSA "ML-DSA PRIVATE KEY"
 #define PEM_KEY_PKCS8 "PRIVATE KEY"
 
 #define MAX_PEM_HEADER_SIZE 25
@@ -507,6 +628,17 @@ int gnutls_x509_privkey_import(gnutls_x509_privkey_t key,
 					if (result >= 0)
 						key->params.algo =
 							GNUTLS_PK_DSA;
+				} else if (left > sizeof(PEM_KEY_ML_DSA) &&
+					   memcmp(ptr, PEM_KEY_ML_DSA,
+						  sizeof(PEM_KEY_ML_DSA) - 1) ==
+						   0) {
+					result = _gnutls_fbase64_decode(
+						PEM_KEY_ML_DSA, begin_ptr, left,
+						&_data);
+					if (result >= 0) {
+						key->params.algo =
+							GNUTLS_PK_MLDSA44;
+					}
 				}
 
 				if (key->params.algo == GNUTLS_PK_UNKNOWN &&
@@ -566,6 +698,13 @@ int gnutls_x509_privkey_import(gnutls_x509_privkey_t key,
 			gnutls_assert();
 			key->key = NULL;
 		}
+	} else if (IS_ML_DSA(key->params.algo)) {
+		result = _gnutls_privkey_decode_ml_dsa_key(&key->key, &_data,
+							   key);
+		if (result < 0) {
+			gnutls_assert();
+			key->key = NULL;
+		}
 	} else {
 		/* Try decoding each of the keys, and accept the one that
 		 * succeeds.
@@ -617,7 +756,7 @@ finish:
 
 cleanup:
 	if (need_free) {
-		zeroize_temp_key(_data.data, _data.size);
+		zeroize_key(_data.data, _data.size);
 		_gnutls_free_datum(&_data);
 	}
 
@@ -668,6 +807,8 @@ fail:
 	return ret;
 }
 
+#define MAX_ALGORITHM_NAME_SIZE_IN_PEM_HEADER 21
+
 /**
  * gnutls_x509_privkey_import2:
  * @key: The data to store the parsed key
@@ -711,9 +852,10 @@ int gnutls_x509_privkey_import2(gnutls_x509_privkey_t key,
 			left = data->size -
 			       ((ptrdiff_t)ptr - (ptrdiff_t)data->data);
 
-			if (data->size - left > 15) {
-				ptr -= 15;
-				left += 15;
+			if (data->size - left >
+			    MAX_ALGORITHM_NAME_SIZE_IN_PEM_HEADER) {
+				ptr -= MAX_ALGORITHM_NAME_SIZE_IN_PEM_HEADER;
+				left += MAX_ALGORITHM_NAME_SIZE_IN_PEM_HEADER;
 			} else {
 				ptr = (char *)data->data;
 				left = data->size;
@@ -727,13 +869,19 @@ int gnutls_x509_privkey_import2(gnutls_x509_privkey_t key,
 				       ((ptrdiff_t)ptr - (ptrdiff_t)data->data);
 			}
 
-			if (ptr != NULL && left > sizeof(PEM_KEY_RSA)) {
-				if (memcmp(ptr, PEM_KEY_RSA,
-					   sizeof(PEM_KEY_RSA) - 1) == 0 ||
-				    memcmp(ptr, PEM_KEY_ECC,
-					   sizeof(PEM_KEY_ECC) - 1) == 0 ||
-				    memcmp(ptr, PEM_KEY_DSA,
-					   sizeof(PEM_KEY_DSA) - 1) == 0) {
+			if (ptr != NULL) {
+				if ((left > sizeof(PEM_KEY_RSA) &&
+				     memcmp(ptr, PEM_KEY_RSA,
+					    sizeof(PEM_KEY_RSA) - 1) == 0) ||
+				    (left > sizeof(PEM_KEY_ECC) &&
+				     memcmp(ptr, PEM_KEY_ECC,
+					    sizeof(PEM_KEY_ECC) - 1) == 0) ||
+				    (left > sizeof(PEM_KEY_DSA) &&
+				     memcmp(ptr, PEM_KEY_DSA,
+					    sizeof(PEM_KEY_DSA) - 1) == 0) ||
+				    (left > sizeof(PEM_KEY_ML_DSA) &&
+				     memcmp(ptr, PEM_KEY_ML_DSA,
+					    sizeof(PEM_KEY_ML_DSA) - 1) == 0)) {
 					head_enc = 0;
 				}
 			}
@@ -1193,20 +1341,10 @@ int gnutls_x509_privkey_import_ecc_raw(gnutls_x509_privkey_t key,
 			goto cleanup;
 		}
 
-		if (curve_is_eddsa(curve)) {
-			size = gnutls_ecc_curve_get_size(curve);
-			if (x->size != size || k->size != size) {
-				ret = gnutls_assert_val(
-					GNUTLS_E_INVALID_REQUEST);
-				goto cleanup;
-			}
-
-			ret = _gnutls_set_datum(&key->params.raw_pub, x->data,
-						x->size);
-			if (ret < 0) {
-				gnutls_assert();
-				goto cleanup;
-			}
+		size = gnutls_ecc_curve_get_size(curve);
+		if ((x && x->size != size) || k->size != size) {
+			ret = gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+			goto cleanup;
 		}
 
 		ret = _gnutls_set_datum(&key->params.raw_priv, k->data,
@@ -1216,24 +1354,24 @@ int gnutls_x509_privkey_import_ecc_raw(gnutls_x509_privkey_t key,
 			goto cleanup;
 		}
 
+		if (x) {
+			ret = _gnutls_set_datum(&key->params.raw_pub, x->data,
+						x->size);
+			if (ret < 0) {
+				gnutls_assert();
+				goto cleanup;
+			}
+		} else {
+			ret = _gnutls_pk_fixup(key->params.algo, GNUTLS_IMPORT,
+					       &key->params);
+			if (ret < 0) {
+				gnutls_assert();
+				goto cleanup;
+			}
+		}
+
 		return 0;
 	}
-
-	if (_gnutls_mpi_init_scan_nz(&key->params.params[ECC_X], x->data,
-				     x->size)) {
-		gnutls_assert();
-		ret = GNUTLS_E_MPI_SCAN_FAILED;
-		goto cleanup;
-	}
-	key->params.params_nr++;
-
-	if (_gnutls_mpi_init_scan_nz(&key->params.params[ECC_Y], y->data,
-				     y->size)) {
-		gnutls_assert();
-		ret = GNUTLS_E_MPI_SCAN_FAILED;
-		goto cleanup;
-	}
-	key->params.params_nr++;
 
 	if (_gnutls_mpi_init_scan_nz(&key->params.params[ECC_K], k->data,
 				     k->size)) {
@@ -1245,10 +1383,29 @@ int gnutls_x509_privkey_import_ecc_raw(gnutls_x509_privkey_t key,
 
 	key->params.algo = GNUTLS_PK_EC;
 
-	ret = _gnutls_pk_fixup(GNUTLS_PK_EC, GNUTLS_IMPORT, &key->params);
-	if (ret < 0) {
-		gnutls_assert();
-		goto cleanup;
+	if (x && y) {
+		ret = _gnutls_mpi_init_scan_nz(&key->params.params[ECC_X],
+					       x->data, x->size);
+		if (ret < 0) {
+			ret = gnutls_assert_val(GNUTLS_E_MPI_SCAN_FAILED);
+			goto cleanup;
+		}
+		key->params.params_nr++;
+
+		ret = _gnutls_mpi_init_scan_nz(&key->params.params[ECC_Y],
+					       y->data, y->size);
+		if (ret < 0) {
+			ret = gnutls_assert_val(GNUTLS_E_MPI_SCAN_FAILED);
+			goto cleanup;
+		}
+		key->params.params_nr++;
+	} else {
+		ret = _gnutls_pk_fixup(GNUTLS_PK_EC, GNUTLS_IMPORT,
+				       &key->params);
+		if (ret < 0) {
+			gnutls_assert();
+			goto cleanup;
+		}
 	}
 
 	ret = _gnutls_asn1_encode_privkey(&key->key, &key->params);
@@ -1477,14 +1634,21 @@ int gnutls_x509_privkey_set_spki(gnutls_x509_privkey_t key,
 
 static const char *set_msg(gnutls_x509_privkey_t key)
 {
-	if (GNUTLS_PK_IS_RSA(key->params.algo)) {
+	switch (key->params.algo) {
+	case GNUTLS_PK_RSA:
+	case GNUTLS_PK_RSA_PSS:
 		return PEM_KEY_RSA;
-	} else if (key->params.algo == GNUTLS_PK_DSA) {
+	case GNUTLS_PK_DSA:
 		return PEM_KEY_DSA;
-	} else if (key->params.algo == GNUTLS_PK_EC)
+	case GNUTLS_PK_EC:
 		return PEM_KEY_ECC;
-	else
+	case GNUTLS_PK_MLDSA44:
+	case GNUTLS_PK_MLDSA65:
+	case GNUTLS_PK_MLDSA87:
+		return PEM_KEY_ML_DSA;
+	default:
 		return "UNKNOWN";
+	}
 }
 
 /**

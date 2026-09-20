@@ -257,6 +257,25 @@ cleanup:
 	return ret;
 }
 
+static int _gnutls_x509_write_ml_dsa_pubkey(const gnutls_pk_params_st *params,
+					    gnutls_datum_t *raw)
+{
+	int ret;
+
+	raw->data = NULL;
+	raw->size = 0;
+
+	if (params->raw_pub.size == 0)
+		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+
+	ret = _gnutls_set_datum(raw, params->raw_pub.data,
+				params->raw_pub.size);
+	if (ret < 0)
+		return gnutls_assert_val(ret);
+
+	return 0;
+}
+
 int _gnutls_x509_write_pubkey_params(const gnutls_pk_params_st *params,
 				     gnutls_datum_t *der)
 {
@@ -281,6 +300,9 @@ int _gnutls_x509_write_pubkey_params(const gnutls_pk_params_st *params,
 	case GNUTLS_PK_EDDSA_ED448:
 	case GNUTLS_PK_ECDH_X25519:
 	case GNUTLS_PK_ECDH_X448:
+	case GNUTLS_PK_MLDSA44:
+	case GNUTLS_PK_MLDSA65:
+	case GNUTLS_PK_MLDSA87:
 		der->data = NULL;
 		der->size = 0;
 
@@ -316,6 +338,10 @@ int _gnutls_x509_write_pubkey(const gnutls_pk_params_st *params,
 	case GNUTLS_PK_GOST_12_256:
 	case GNUTLS_PK_GOST_12_512:
 		return _gnutls_x509_write_gost_pubkey(params, der);
+	case GNUTLS_PK_MLDSA44:
+	case GNUTLS_PK_MLDSA65:
+	case GNUTLS_PK_MLDSA87:
+		return _gnutls_x509_write_ml_dsa_pubkey(params, der);
 	default:
 		return gnutls_assert_val(GNUTLS_E_UNIMPLEMENTED_FEATURE);
 	}
@@ -944,11 +970,12 @@ static int _gnutls_asn1_encode_ecc(asn1_node *c2, gnutls_pk_params_st *params)
 {
 	int ret;
 	uint8_t one = '\x01';
-	gnutls_datum_t pubkey = { NULL, 0 };
-	const char *oid;
+	gnutls_datum_t raw_priv = { NULL, 0 }, raw_pub = { NULL, 0 };
+	const gnutls_datum_t *privkey, *pubkey;
+	const gnutls_ecc_curve_entry_st *ce;
 
-	oid = gnutls_ecc_curve_get_oid(params->curve);
-	if (oid == NULL)
+	ce = _gnutls_ecc_curve_get_params(params->curve);
+	if (ce->oid == NULL)
 		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
 
 	/* first make sure that no previously allocated data are leaked */
@@ -971,49 +998,48 @@ static int _gnutls_asn1_encode_ecc(asn1_node *c2, gnutls_pk_params_st *params)
 		goto cleanup;
 	}
 
-	if (curve_is_eddsa(params->curve) ||
-	    curve_is_modern_ecdh(params->curve)) {
+	if (_curve_is_eddsa(ce) || _curve_is_modern_ecdh(ce)) {
 		if (params->raw_pub.size == 0 || params->raw_priv.size == 0)
 			return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
-		ret = asn1_write_value(*c2, "privateKey", params->raw_priv.data,
-				       params->raw_priv.size);
-		if (ret != ASN1_SUCCESS) {
-			gnutls_assert();
-			ret = _gnutls_asn2err(ret);
-			goto cleanup;
-		}
-
-		ret = asn1_write_value(*c2, "publicKey", params->raw_pub.data,
-				       params->raw_pub.size * 8);
-		if (ret != ASN1_SUCCESS) {
-			gnutls_assert();
-			ret = _gnutls_asn2err(ret);
-			goto cleanup;
-		}
+		privkey = &params->raw_priv;
+		pubkey = &params->raw_pub;
 	} else {
 		if (params->params_nr != ECC_PRIVATE_PARAMS)
 			return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
 
-		ret = _gnutls_ecc_ansi_x962_export(params->curve,
-						   params->params[ECC_X],
-						   params->params[ECC_Y],
-						   &pubkey);
-		if (ret < 0)
-			return gnutls_assert_val(ret);
-
-		ret = _gnutls_x509_write_key_int(*c2, "privateKey",
-						 params->params[ECC_K], 1);
+		ret = _gnutls_mpi_dprint_size(params->params[ECC_K], &raw_priv,
+					      ce->size);
 		if (ret < 0) {
 			gnutls_assert();
 			goto cleanup;
 		}
 
-		if ((ret = asn1_write_value(*c2, "publicKey", pubkey.data,
-					    pubkey.size * 8)) != ASN1_SUCCESS) {
+		ret = _gnutls_ecc_ansi_x962_export(params->curve,
+						   params->params[ECC_X],
+						   params->params[ECC_Y],
+						   &raw_pub);
+		if (ret < 0) {
 			gnutls_assert();
-			ret = _gnutls_asn2err(ret);
 			goto cleanup;
 		}
+
+		privkey = &raw_priv;
+		pubkey = &raw_pub;
+	}
+
+	ret = asn1_write_value(*c2, "privateKey", privkey->data, privkey->size);
+	if (ret != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(ret);
+		goto cleanup;
+	}
+
+	ret = asn1_write_value(*c2, "publicKey", pubkey->data,
+			       pubkey->size * 8);
+	if (ret != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(ret);
+		goto cleanup;
 	}
 
 	/* write our choice */
@@ -1024,19 +1050,18 @@ static int _gnutls_asn1_encode_ecc(asn1_node *c2, gnutls_pk_params_st *params)
 		goto cleanup;
 	}
 
-	if ((ret = asn1_write_value(*c2, "parameters.namedCurve", oid, 1)) !=
-	    ASN1_SUCCESS) {
+	if ((ret = asn1_write_value(*c2, "parameters.namedCurve", ce->oid,
+				    1)) != ASN1_SUCCESS) {
 		gnutls_assert();
 		ret = _gnutls_asn2err(ret);
 		goto cleanup;
 	}
 
-	_gnutls_free_datum(&pubkey);
-	return 0;
-
 cleanup:
-	asn1_delete_structure2(c2, ASN1_DELETE_FLAG_ZEROIZE);
-	_gnutls_free_datum(&pubkey);
+	if (ret < 0)
+		asn1_delete_structure2(c2, ASN1_DELETE_FLAG_ZEROIZE);
+	_gnutls_free_datum(&raw_pub);
+	_gnutls_free_key_datum(&raw_priv);
 
 	return ret;
 }
@@ -1146,6 +1171,82 @@ cleanup:
 	return ret;
 }
 
+/* Encodes the ML-DSA parameters into an ASN.1 MLDSAPrivateKey structure.
+ */
+static int _gnutls_asn1_encode_ml_dsa(asn1_node *c2,
+				      gnutls_pk_params_st *params)
+{
+	int result, ret;
+	const char *oid;
+	const uint8_t one = 1;
+
+	if (unlikely(params->raw_pub.size == 0 || params->raw_priv.size == 0))
+		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+
+	oid = gnutls_pk_get_oid(params->algo);
+	if (oid == NULL)
+		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+
+	/* first make sure that no previously allocated data are leaked */
+	if (*c2 != NULL) {
+		asn1_delete_structure(c2);
+		*c2 = NULL;
+	}
+
+	if ((result = asn1_create_element(_gnutls_get_gnutls_asn(),
+					  "GNUTLS.MLDSAPrivateKey", c2)) !=
+	    ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(result);
+		goto cleanup;
+	}
+
+	/* signify publicKey is embedded in a separate field */
+	if ((result = asn1_write_value(*c2, "version", &one, 1)) !=
+	    ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(result);
+		goto cleanup;
+	}
+
+	if ((result = asn1_write_value(*c2, "privateKeyAlgorithm.algorithm",
+				       oid, 1)) != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(result);
+		goto cleanup;
+	}
+
+	if ((result = asn1_write_value(*c2, "privateKeyAlgorithm.parameters",
+				       NULL, 0)) != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(result);
+		goto cleanup;
+	}
+
+	result = asn1_write_value(*c2, "privateKey", params->raw_priv.data,
+				  params->raw_priv.size);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(result);
+		goto cleanup;
+	}
+
+	result = asn1_write_value(*c2, "publicKey", params->raw_pub.data,
+				  params->raw_pub.size);
+	if (result != ASN1_SUCCESS) {
+		gnutls_assert();
+		ret = _gnutls_asn2err(result);
+		goto cleanup;
+	}
+
+	ret = GNUTLS_E_SUCCESS;
+
+cleanup:
+	asn1_delete_structure2(c2, ASN1_DELETE_FLAG_ZEROIZE);
+
+	return ret;
+}
+
 int _gnutls_asn1_encode_privkey(asn1_node *c2, gnutls_pk_params_st *params)
 {
 	switch (params->algo) {
@@ -1168,6 +1269,10 @@ int _gnutls_asn1_encode_privkey(asn1_node *c2, gnutls_pk_params_st *params)
 	case GNUTLS_PK_DH:
 		/* DH keys are only exportable in PKCS#8 format */
 		return GNUTLS_E_INVALID_REQUEST;
+	case GNUTLS_PK_MLDSA44:
+	case GNUTLS_PK_MLDSA65:
+	case GNUTLS_PK_MLDSA87:
+		return _gnutls_asn1_encode_ml_dsa(c2, params);
 	default:
 		return GNUTLS_E_UNIMPLEMENTED_FEATURE;
 	}

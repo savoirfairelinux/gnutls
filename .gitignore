@@ -177,12 +177,14 @@ doc/scripts/Makefile
 doc/scripts/Makefile.in
 doc/socket-api.texi
 doc/stamp_enums
+doc/stamp_error_codes
 doc/stamp_functions
 doc/stamp_invoke
 doc/stamp-vti
 doc/tpm-api.texi
 doc/version.texi
 doc/x509-api.texi
+doc/hpke-api.texi
 extra/includes/Makefile
 extra/includes/Makefile.in
 extra/libgnutls-openssl.la
@@ -192,6 +194,8 @@ fuzz/*_fuzzer
 *.gcda
 *.gcno
 *.gcov
+.gitlab-ci-local
+.gitlab-ci-local.yml
 /gl/*
 !/gl/override
 /GNUmakefile
@@ -222,7 +226,6 @@ lib/libgnutls-xssl.la
 lib/libgnutlsxx.la
 lib/Makefile
 lib/Makefile.in
-lib/liboqs/libcrypto.la
 lib/minitasn1/libminitasn1.la
 lib/minitasn1/Makefile
 lib/minitasn1/Makefile.in
@@ -236,6 +239,9 @@ lib/openpgp/libgnutls_openpgp.la
 lib/openpgp/Makefile
 lib/openpgp/Makefile.in
 lib/openpgp/pgp-api.texi
+lib/pkcs11/libgnutls_pkcs11.la
+lib/pkcs11/Makefile
+lib/pkcs11/Makefile.in
 lib/priority_options.h
 .libs
 libtool
@@ -246,6 +252,7 @@ lib/x509/Makefile.in
 lib/x509/supported_exts.h
 lib/x509/x509-api.texi
 lib/*_asn1_tab.c
+lib/hpke/libgnutls_hpke.la
 *.lo
 *.log
 m4/*
@@ -350,6 +357,7 @@ tests/client
 tests/client-fastopen
 tests/client-sign-md5-rep
 tests/client_dsa_key
+tests/compress-cert-conf
 tests/conv-utf8
 tests/crl-basic
 tests/crl_apis
@@ -433,6 +441,7 @@ tests/handshake-write
 tests/hex
 tests/hostname-check
 tests/hostname-check-utf8
+tests/hpke-tests
 tests/id-on-xmppAddr
 tests/infoaccess
 tests/init_roundtrip
@@ -459,6 +468,7 @@ tests/ktls_keyupdate
 tests/libpkcs11mock1.la
 tests/libpkcs11mock2.la
 tests/libpkcs11mock3.la
+tests/libpkcs11mock4.la
 tests/libutils.la
 tests/long-session-id
 tests/mini
@@ -565,6 +575,7 @@ tests/pkcs11-get-raw-issuer-exts
 tests/pkcs11-import-url-privkey
 tests/pkcs11-import-url-privkey-caps
 tests/pkcs11-mechanisms
+tests/pkcs11-obj-get-pk-algorithm
 tests/pkcs11-obj-raw
 tests/pkcs11-privkey-always-auth
 tests/pkcs11-privkey-export
@@ -574,10 +585,13 @@ tests/pkcs11-privkey-raw
 tests/pkcs11-privkey-safenet-always-auth
 tests/pkcs11-token-raw
 tests/pkcs11/distrust-after
+tests/pkcs11/eddsa-ecpoint-encodings
 tests/pkcs11/gnutls_pcert_list_import_x509_file
 tests/pkcs11/gnutls_x509_crt_list_import_url
 tests/pkcs11/list-objects
 tests/pkcs11/list-tokens
+tests/pkcs11/long-label
+tests/pkcs11/os-locking-ok
 tests/pkcs11/pkcs11-chainverify
 tests/pkcs11/pkcs11-combo
 tests/pkcs11/pkcs11-ec-privkey-test
@@ -599,6 +613,10 @@ tests/pkcs11/pkcs11-pubkey-import-rsa
 tests/pkcs11/pkcs11-rsa-pss-privkey-test
 tests/pkcs11/tls-neg-pkcs11-key
 tests/pkcs11/tls-neg-pkcs11-no-key
+tests/pkcs11-provider/pkcs11-provider-cipher
+tests/pkcs11-provider/pkcs11-provider-hmac
+tests/pkcs11-provider/pkcs11-provider-pk
+tests/pkcs11-provider/pkcs11-provider-sig
 tests/pkcs12-decode/Makefile
 tests/pkcs12-decode/Makefile.in
 tests/pkcs12_encode
@@ -608,6 +626,7 @@ tests/pkcs12_simple
 tests/pkcs7
 tests/pkcs7-cat-parse
 tests/pkcs7-gen
+tests/pkcs7-pad
 tests/pkcs7-verify-double-free
 tests/pkcs8-decode/Makefile
 tests/pkcs8-decode/Makefile.in
@@ -743,7 +762,9 @@ tests/slow/keygen
 tests/slow/mac-override
 tests/softhsm-*.db/
 tests/softhsm-distrust-after.config
+tests/softhsm-long-label.config
 tests/softhsm-neg-no-key.config
+tests/softhsm-os-locking-ok.config
 tests/softhsm-post-handshake-with-cert-pkcs11.config
 tests/spki
 tests/spki-abstract
@@ -870,6 +891,7 @@ tests/tls13/compress-cert-neg
 tests/tls13/compress-cert-neg2
 tests/tls13/cookie
 tests/tls13/hello_retry_request
+tests/tls13/hello_retry_request_psk
 tests/tls13/hello_retry_request_resume
 tests/tls13/key_limits
 tests/tls13/key_share

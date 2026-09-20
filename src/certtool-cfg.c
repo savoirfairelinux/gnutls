@@ -257,7 +257,7 @@ void cfg_init(void)
 	if (val != NULL) {                                                 \
 		if (s_name == NULL) {                                      \
 			i = 0;                                             \
-			s_name = malloc(sizeof(char *) * MAX_ENTRIES);     \
+			s_name = calloc(MAX_ENTRIES + 1, sizeof(char *));  \
 			CHECK_MALLOC(s_name);                              \
 			do {                                               \
 				if (val && strcmp(val->name, k_name) != 0) \
@@ -279,7 +279,7 @@ void cfg_init(void)
 		char *p;                                                      \
 		if (s_name == NULL) {                                         \
 			i = 0;                                                \
-			s_name = malloc(sizeof(char *) * MAX_ENTRIES);        \
+			s_name = calloc(MAX_ENTRIES + 1, sizeof(char *));     \
 			CHECK_MALLOC(s_name);                                 \
 			do {                                                  \
 				if (val && strcmp(val->name, k_name) != 0)    \
@@ -1295,7 +1295,7 @@ static unsigned char *decode_ext_string(char *str, unsigned int *ret_size)
 	int ret, res;
 
 	p = strchr(str, '(');
-	if (p != 0) {
+	if (p != NULL) {
 		if (strncmp(str, "octet_string", 12) == 0) {
 			action = ENCODE_OCTET_STRING;
 		} else {
@@ -2862,7 +2862,7 @@ void get_tlsfeatures_set(int type, void *crt)
 		}
 
 		for (i = 0; cfg.tls_features[i]; ++i) {
-			feature = strtoul(cfg.tls_features[i], 0, 10);
+			feature = strtoul(cfg.tls_features[i], NULL, 10);
 			ret = gnutls_x509_tlsfeatures_add(features, feature);
 			if (ret < 0) {
 				fprintf(stderr,

@@ -111,6 +111,8 @@ static bool is_approved_pk_algo(gnutls_pk_algorithm_t algo)
 	case GNUTLS_PK_RSA_PSS:
 	case GNUTLS_PK_RSA_OAEP:
 	case GNUTLS_PK_EC:
+	case GNUTLS_PK_EDDSA_ED25519:
+	case GNUTLS_PK_EDDSA_ED448:
 		return true;
 	default:
 		return false;
@@ -160,7 +162,8 @@ void doit(void)
 #endif
 			    algorithm == GNUTLS_PK_ECDH_X25519 ||
 			    algorithm == GNUTLS_PK_ECDH_X448 ||
-			    algorithm == GNUTLS_PK_MLKEM768)
+			    algorithm == GNUTLS_PK_MLKEM768 ||
+			    algorithm == GNUTLS_PK_MLKEM1024)
 				continue;
 
 			if (algorithm == GNUTLS_PK_GOST_01 ||

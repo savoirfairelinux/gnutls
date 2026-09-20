@@ -206,19 +206,30 @@ static const gnutls_pk_entry pk_algorithms[] = {
 	  .oid = NULL,
 	  .id = GNUTLS_PK_MLKEM768,
 	  .curve = GNUTLS_ECC_CURVE_INVALID },
-/* Hidden behind HAVE_LIBOQS as it will be removed in the future.
-	 */
-#ifdef HAVE_LIBOQS
-	{ .name = "KYBER768",
+	{ .name = "ML-KEM-1024",
 	  .oid = NULL,
-	  .id = GNUTLS_PK_EXP_KYBER768,
+	  .id = GNUTLS_PK_MLKEM1024,
 	  .curve = GNUTLS_ECC_CURVE_INVALID },
-#endif
+	{ .name = "ML-DSA-44",
+	  .oid = MLDSA44_OID,
+	  .id = GNUTLS_PK_MLDSA44,
+	  .curve = GNUTLS_ECC_CURVE_INVALID,
+	  .no_prehashed = 1 },
+	{ .name = "ML-DSA-65",
+	  .oid = MLDSA65_OID,
+	  .id = GNUTLS_PK_MLDSA65,
+	  .curve = GNUTLS_ECC_CURVE_INVALID,
+	  .no_prehashed = 1 },
+	{ .name = "ML-DSA-87",
+	  .oid = MLDSA87_OID,
+	  .id = GNUTLS_PK_MLDSA87,
+	  .curve = GNUTLS_ECC_CURVE_INVALID,
+	  .no_prehashed = 1 },
 	{ .name = "UNKNOWN",
 	  .oid = NULL,
 	  .id = GNUTLS_PK_UNKNOWN,
 	  .curve = GNUTLS_ECC_CURVE_INVALID },
-	{ 0, 0, 0, 0 }
+	{ NULL, NULL, 0, 0 }
 };
 
 #define GNUTLS_PK_LOOP(b)                                       \

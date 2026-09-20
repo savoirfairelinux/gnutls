@@ -28,6 +28,7 @@
 #include "pkcs11x.h"
 #include "x509/common.h"
 #include "pk.h"
+#include "minmax.h"
 
 static const ck_bool_t tval = 1;
 static const ck_bool_t fval = 0;
@@ -367,19 +368,18 @@ static int add_pubkey(gnutls_pubkey_t pubkey, struct ck_attribute *a,
 			return ret;
 		}
 
+		ret = _gnutls_set_datum(&ecpoint, pubkey->params.raw_pub.data,
+					pubkey->params.raw_pub.size);
+		if (ret < 0) {
+			gnutls_assert();
+			_gnutls_free_datum(&params);
+			return ret;
+		}
+
 		a[*a_val].type = CKA_EC_PARAMS;
 		a[*a_val].value = params.data;
 		a[*a_val].value_len = params.size;
 		(*a_val)++;
-
-		ret = _gnutls_x509_encode_string(ASN1_ETYPE_OCTET_STRING,
-						 pubkey->params.raw_pub.data,
-						 pubkey->params.raw_pub.size,
-						 &ecpoint);
-		if (ret < 0) {
-			gnutls_assert();
-			return ret;
-		}
 
 		a[*a_val].type = CKA_EC_POINT;
 		a[*a_val].value = ecpoint.data;
@@ -1173,7 +1173,7 @@ int gnutls_pkcs11_delete_url(const char *object_url, unsigned int flags)
  * gnutls_pkcs11_token_init:
  * @token_url: A PKCS #11 URL specifying a token
  * @so_pin: Security Officer's PIN
- * @label: A name to be used for the token
+ * @label: A name to be used for the token, at most 32 characters
  *
  * This function will initialize (format) a token. If the token is
  * at a factory defaults state the security officer's PIN given will be
@@ -1211,7 +1211,7 @@ int gnutls_pkcs11_token_init(const char *token_url, const char *so_pin,
 	/* so it seems memset has other uses than zeroing! */
 	memset(flabel, ' ', sizeof(flabel));
 	if (label != NULL)
-		memcpy(flabel, label, strlen(label));
+		memcpy(flabel, label, MIN(sizeof(flabel), strlen(label)));
 
 	rv = pkcs11_init_token(module, slot, (uint8_t *)so_pin, strlen(so_pin),
 			       (uint8_t *)flabel);
@@ -1266,10 +1266,9 @@ int gnutls_pkcs11_token_set_pin(const char *token_url, const char *oldpin,
 		ses_flags = SESSION_WRITE | SESSION_LOGIN;
 
 	ret = pkcs11_open_session(&sinfo, NULL, info, ses_flags);
-	p11_kit_uri_free(info);
-
 	if (ret < 0) {
 		gnutls_assert();
+		p11_kit_uri_free(info);
 		return ret;
 	}
 
@@ -1290,9 +1289,11 @@ int gnutls_pkcs11_token_set_pin(const char *token_url, const char *oldpin,
 		oldpin_size = L(oldpin);
 
 		if (!(sinfo.tinfo.flags & CKF_PROTECTED_AUTHENTICATION_PATH)) {
-			if (newpin == NULL)
-				return gnutls_assert_val(
+			if (newpin == NULL) {
+				ret = gnutls_assert_val(
 					GNUTLS_E_INVALID_REQUEST);
+				goto finish;
+			}
 
 			if (oldpin == NULL) {
 				struct pin_info_st pin_info;
@@ -1324,6 +1325,7 @@ int gnutls_pkcs11_token_set_pin(const char *token_url, const char *oldpin,
 	ret = 0;
 
 finish:
+	p11_kit_uri_free(info);
 	pkcs11_close_session(&sinfo);
 	return ret;
 }

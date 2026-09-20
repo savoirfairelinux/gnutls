@@ -1287,7 +1287,7 @@ begin:
 	/* receive headers */
 	ret = recv_headers(
 		session, record_params, type, htype, &record,
-		(!(session->internals.flags & GNUTLS_NONBLOCK)) ? &ms : 0);
+		(!(session->internals.flags & GNUTLS_NONBLOCK)) ? &ms : NULL);
 	if (ret < 0) {
 		ret = gnutls_assert_val_fatal(ret);
 		goto recv_error;
@@ -1302,7 +1302,7 @@ begin:
 	 */
 	ret = _gnutls_io_read_buffered(
 		session, record.packet_size, record.type,
-		(!(session->internals.flags & GNUTLS_NONBLOCK)) ? &ms : 0);
+		(!(session->internals.flags & GNUTLS_NONBLOCK)) ? &ms : NULL);
 	if (ret != record.packet_size) {
 		gnutls_assert();
 		goto recv_error;
@@ -2045,7 +2045,7 @@ ssize_t gnutls_record_send2(gnutls_session_t session, const void *data,
 		FALLTHROUGH;
 	case RECORD_SEND_KEY_UPDATE_3:
 		if (IS_KTLS_ENABLED(session, GNUTLS_KTLS_SEND)) {
-			return _gnutls_ktls_send(
+			ret = _gnutls_ktls_send(
 				session,
 				session->internals.record_key_update_buffer.data,
 				session->internals.record_key_update_buffer

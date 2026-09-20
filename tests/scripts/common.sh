@@ -70,7 +70,7 @@ check_if_port_in_use() {
 	local PORT=$1
 	reserve_port $PORT
 	have_port_finder
-	if ! $PFCMD -an|grep "[\:\.]$PORT" >/dev/null 2>&1; then
+	if ! $PFCMD -an|grep -v ::|grep "[\:\.]$PORT" >/dev/null 2>&1; then
 		return 1
 	fi
 	unreserve_port $PORT
@@ -79,7 +79,7 @@ check_if_port_in_use() {
 check_if_port_listening() {
 	local PORT=$1
 	have_port_finder
-	$PFCMD -anl|grep "[\:\.]$PORT"|grep LISTEN >/dev/null 2>&1
+	$PFCMD -anl|grep -v ::|grep "[\:\.]$PORT"|grep LISTEN >/dev/null 2>&1
 }
 
 # Find a port number not currently in use.
@@ -90,13 +90,13 @@ GETPORT='
         if test -n "$RANDOM"; then myrandom=$(($RANDOM + $RANDOM)); fi
         if test -z "$myrandom"; then myrandom=$(date +%N | sed s/^0*//); fi
         if test -z "$myrandom"; then myrandom=0; fi
-        PORT="$(((($$<<15)|$myrandom) % 63001 + 2000))"
+        PORT="$(((($$<<15)|$myrandom) % 30000 + 2000))"
         check_if_port_in_use $PORT;rc=$?
     done
 '
 
 skip_if_no_datefudge() {
-	if test "$ac_cv_faketime_works" != yes; then
+	if test "$gnutls_cv_prog_faketime_works" != yes; then
 		exit 77
 	fi
 }
@@ -266,4 +266,30 @@ check_if_equal() {
 
 	diff -b -B "$1" "$2"
 	return $?
+}
+
+# works for FreeBSD and Linux
+# $1: the major version to check against
+# $2: the minor version to check against
+kernel_version_check() {
+	local required_major=$1
+	local required_minor=$2
+
+	kernel_version=$(uname -r | sed -E 's/^([0-9]+\.[0-9]+).*/\1/' 2>/dev/null)
+	kernel_major=$(echo $kernel_version | cut -d. -f1 2>/dev/null)
+	kernel_minor=$(echo $kernel_version | cut -d. -f2 2>/dev/null)
+
+	if ! [[ "$kernel_major" =~ ^[0-9]+$ ]] || ! [[ "$kernel_minor" =~ ^[0-9]+$ ]]; then
+		return 1
+	fi
+
+	if [ "$kernel_major" -lt "$required_major" ]; then
+		return 1
+	fi
+
+	if [ "$kernel_major" -eq "$required_major" ] && [ "$kernel_minor" -lt "$required_minor" ]; then
+		return 1
+	fi
+
+	return 0
 }

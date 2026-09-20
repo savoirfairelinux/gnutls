@@ -138,8 +138,10 @@ static void keylog_once_init(void)
 	keylogfile = secure_getenv("SSLKEYLOGFILE");
 	if (keylogfile != NULL && *keylogfile != '\0') {
 		keylog = fopen(keylogfile, "ae");
-		_gnutls_debug_log("unable to open keylog file %s\n",
-				  keylogfile);
+		if (keylog == NULL)
+			_gnutls_debug_log(
+				"unable to open keylog file %s, error %d\n",
+				keylogfile, errno);
 	}
 }
 
@@ -253,7 +255,7 @@ static int generate_normal_master(gnutls_session_t session,
 	}
 
 	if (!keep_premaster)
-		_gnutls_free_temp_key_datum(premaster);
+		_gnutls_free_key_datum(premaster);
 
 	if (ret < 0)
 		return ret;

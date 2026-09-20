@@ -38,8 +38,9 @@
 #include "pkcs11_int.h"
 #include "urls.h"
 #include "system-keys.h"
-#include "hash.h"
-#include "hash-pjw-bare.h"
+#include "gl_linkedhash_list.h"
+#include "gl_list.h"
+#include <hashcode-mem.h>
 
 static int crt_reinit(gnutls_x509_crt_t crt)
 {
@@ -415,16 +416,22 @@ static int cache_alt_names(gnutls_x509_crt_t cert)
 
 static bool hcomparator(const void *v1, const void *v2)
 {
-	return (strcmp(v1, v2) == 0);
+	return strcmp(v1, v2) == 0;
 }
 
-static size_t hhasher(const void *entry, size_t n)
+static size_t hhasher(const void *entry)
 {
 	const char *e = entry;
 	if (e == NULL || e[0] == 0)
 		return 0;
 
-	return hash_pjw_bare(e, strlen(e)) % n;
+	return hash_pjw_bare(e, strlen(e));
+}
+
+static void hdisposer(const void *entry)
+{
+	void *e = (void *)entry;
+	gnutls_free(e);
 }
 
 #ifdef STRICT_X509
@@ -565,7 +572,7 @@ int _gnutls_check_cert_sanity(gnutls_x509_crt_t cert)
 {
 	int ret = 0, version;
 	gnutls_datum_t exts;
-	Hash_table *htable = NULL;
+	gl_list_t htable = NULL;
 
 	if (cert->flags & GNUTLS_X509_CRT_FLAG_IGNORE_SANITY)
 		return 0;
@@ -615,8 +622,9 @@ int _gnutls_check_cert_sanity(gnutls_x509_crt_t cert)
 		size_t oid_size;
 		char *o;
 
-		htable = hash_initialize(16, NULL, hhasher, hcomparator,
-					 gnutls_free);
+		htable = gl_list_nx_create_empty(GL_LINKEDHASH_LIST,
+						 hcomparator, hhasher,
+						 hdisposer, false);
 		if (htable == NULL)
 			return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
 
@@ -637,12 +645,7 @@ int _gnutls_check_cert_sanity(gnutls_x509_crt_t cert)
 				goto cleanup;
 			}
 
-			ret = hash_insert_if_absent(htable, o, NULL);
-			if (ret == -1) {
-				gnutls_free(o);
-				ret = gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
-				goto cleanup;
-			} else if (ret == 0) {
+			if (gl_list_search(htable, o)) {
 				/* duplicate */
 				gnutls_free(o);
 				_gnutls_debug_log(
@@ -650,6 +653,10 @@ int _gnutls_check_cert_sanity(gnutls_x509_crt_t cert)
 					oid);
 				ret = gnutls_assert_val(
 					GNUTLS_E_X509_DUPLICATE_EXTENSION);
+				goto cleanup;
+			} else if (!gl_list_nx_add_last(htable, o)) {
+				gnutls_free(o);
+				ret = gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
 				goto cleanup;
 			}
 
@@ -671,7 +678,7 @@ int _gnutls_check_cert_sanity(gnutls_x509_crt_t cert)
 #endif
 		}
 
-		hash_free(htable);
+		gl_list_free(htable);
 		htable = NULL;
 	}
 
@@ -721,7 +728,7 @@ int _gnutls_check_cert_sanity(gnutls_x509_crt_t cert)
 
 cleanup:
 	if (htable)
-		hash_free(htable);
+		gl_list_free(htable);
 	return ret;
 }
 
@@ -1555,7 +1562,8 @@ inline static int is_type_printable(int type)
 {
 	if (type == GNUTLS_SAN_DNSNAME || type == GNUTLS_SAN_RFC822NAME ||
 	    type == GNUTLS_SAN_URI || type == GNUTLS_SAN_OTHERNAME_XMPP ||
-	    type == GNUTLS_SAN_OTHERNAME || type == GNUTLS_SAN_REGISTERED_ID)
+	    type == GNUTLS_SAN_OTHERNAME_SRV || type == GNUTLS_SAN_OTHERNAME ||
+	    type == GNUTLS_SAN_REGISTERED_ID)
 		return 1;
 	else
 		return 0;
@@ -3005,7 +3013,7 @@ int gnutls_x509_crt_get_fingerprint(gnutls_x509_crt_t cert,
 	int result;
 	gnutls_datum_t tmp;
 
-	if (buf_size == 0 || cert == NULL) {
+	if (buf_size == NULL || cert == NULL) {
 		return GNUTLS_E_INVALID_REQUEST;
 	}
 
@@ -4511,7 +4519,7 @@ int gnutls_x509_crt_verify_data3(gnutls_x509_crt_t crt,
 	gnutls_pubkey_deinit(pubkey);
 
 	if (ret >= 0) {
-		time_t now = gnutls_time(0);
+		time_t now = gnutls_time(NULL);
 		int res;
 		unsigned usage, i;
 

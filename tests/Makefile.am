@@ -21,7 +21,7 @@
 
 SUBDIRS = . cert-tests slow
 
-TESTS_ENVIRONMENT =
+TESTS_ENVIRONMENT = HOST_OS=$$(uname)
 
 if WINDOWS
 SUBDIRS += windows
@@ -61,7 +61,9 @@ EXTRA_DIST = suppressions.valgrind eagain-common.h cert-common.h test-chains.h \
 	ocsp-tests/response2.der ocsp-tests/response3.der ocsp-tests/certs/ocsp_index.txt ocsp-tests/certs/ocsp_index.txt.attr \
 	ocsp-tests/response1.pem ocsp-tests/response2.pem \
 	ocsp-tests/certs/server_good.key ocsp-tests/certs/server_bad.key ocsp-tests/certs/server_good.template \
-	ocsp-tests/certs/server_bad.template ocsp-tests/certs/ocsp-staple-unrelated.der ocsp-tests/suppressions.valgrind \
+	ocsp-tests/certs/server_bad.template ocsp-tests/certs/ocsp-staple-unrelated.der \
+	ocsp-tests/certs/ocsp-staple-empty.der \
+	ocsp-tests/suppressions.valgrind \
 	ocsp-tests/signer-verify/response-ca.der \
 	ocsp-tests/signer-verify/response-delegated.der \
 	ocsp-tests/signer-verify/response-non-delegated.der \
@@ -78,7 +80,7 @@ EXTRA_DIST = suppressions.valgrind eagain-common.h cert-common.h test-chains.h \
 	testpkcs11-certs/ca.key testpkcs11-certs/client.crt testpkcs11-certs/client-tmpl testpkcs11-certs/server.key \
 	crt_type-neg-common.c \
 	system-override-default-priority-string.bad.config system-override-default-priority-string.none.config system-override-default-priority-string.only-tls13.config system-override-session-hash.sh \
-	client-secrets.h server-secrets.h dh-compute.h
+	client-secrets.h server-secrets.h dh-compute.h ktls_utils.h
 
 AM_CFLAGS = $(WARN_CFLAGS) $(WERROR_CFLAGS)
 AM_CPPFLAGS = \
@@ -130,6 +132,8 @@ ctests = tls13/supported_versions tls13/tls12-no-tls13-exts \
 ctests += tls13/hello_retry_request
 
 ctests += tls13/hello_retry_request_resume
+
+ctests += tls13/hello_retry_request_psk
 
 ctests += tls13/psk-ext
 
@@ -239,9 +243,14 @@ ctests += mini-record-2 simple gnutls_hmac_fast set_pkcs12_cred cert certuniquei
 	 x509cert-dntypes id-on-xmppAddr tls13-compat-mode ciphersuite-name \
 	 x509-upnconstraint xts-key-check cipher-padding pkcs7-verify-double-free \
 	 fips-rsa-sizes tls12-rehandshake-ticket pathbuf tls-force-ems \
-	 psk-importer privkey-derive dh-compute2 ecdh-compute2
+	 psk-importer privkey-derive dh-compute2 ecdh-compute2 pkcs7-pad \
+	 mini-dtls-fragments
 
 ctests += tls-channel-binding
+
+if ENABLE_HPKE
+ctests += hpke-tests
+endif
 
 if HAVE_SECCOMP_TESTS
 ctests += dtls-with-seccomp tls-with-seccomp dtls-client-with-seccomp tls-client-with-seccomp
@@ -356,6 +365,16 @@ libpkcs11mock3_la_SOURCES = pkcs11/pkcs11-mock3.c
 libpkcs11mock3_la_LDFLAGS = -shared -rpath $(pkglibdir) -module -no-undefined -avoid-version
 libpkcs11mock3_la_LIBADD =  ../gl/libgnu.la
 
+noinst_LTLIBRARIES += libpkcs11mock4.la
+libpkcs11mock4_la_SOURCES = pkcs11/pkcs11-mock4.c
+libpkcs11mock4_la_LDFLAGS = -shared -rpath $(pkglibdir) -module -no-undefined -avoid-version
+libpkcs11mock4_la_LIBADD =  ../gl/libgnu.la
+
+noinst_LTLIBRARIES += libpkcs11mock5.la
+libpkcs11mock5_la_SOURCES = pkcs11/pkcs11-mock5.c
+libpkcs11mock5_la_LDFLAGS = -shared -rpath $(pkglibdir) -module -no-undefined -avoid-version
+libpkcs11mock5_la_LIBADD =  ../gl/libgnu.la
+
 pkcs11_cert_import_url_exts_SOURCES = pkcs11/pkcs11-cert-import-url-exts.c
 pkcs11_cert_import_url_exts_DEPENDENCIES = libpkcs11mock1.la libutils.la
 
@@ -379,6 +398,10 @@ pkcs11_token_raw_LDADD = $(LDADD) $(LIBDL)
 pkcs11_obj_raw_SOURCES = pkcs11/pkcs11-obj-raw.c
 pkcs11_obj_raw_DEPENDENCIES = libpkcs11mock1.la libutils.la
 pkcs11_obj_raw_LDADD = $(LDADD) $(LIBDL)
+
+pkcs11_obj_get_pk_algorithm_SOURCES = pkcs11/pkcs11-obj-get-pk-algorithm.c
+pkcs11_obj_get_pk_algorithm_DEPENDENCIES = libpkcs11mock1.la libutils.la
+pkcs11_obj_get_pk_algorithm_LDADD = $(LDADD) $(LIBDL)
 
 pkcs11_import_url_privkey_caps_SOURCES = pkcs11/pkcs11-import-url-privkey.c
 pkcs11_import_url_privkey_caps_DEPENDENCIES = libpkcs11mock1.la libutils.la
@@ -420,8 +443,8 @@ ctests += pkcs11-cert-import-url-exts pkcs11-get-exts pkcs11-get-raw-issuer-exts
 	pkcs11-privkey-fork-reinit pkcs11-mechanisms pkcs11-privkey-safenet-always-auth \
 	pkcs11/pkcs11-rsa-pss-privkey-test pkcs11/tls-neg-pkcs11-key pkcs11/pkcs11-privkey-generate \
 	pkcs11/gnutls_x509_crt_list_import_url pkcs11/gnutls_pcert_list_import_x509_file \
-	pkcs11/pkcs11-eddsa-privkey-test \
-	pkcs11-token-raw pkcs11-obj-raw
+	pkcs11/pkcs11-eddsa-privkey-test pkcs11/eddsa-ecpoint-encodings \
+	pkcs11-obj-get-pk-algorithm pkcs11-token-raw pkcs11-obj-raw
 
 if P11KIT_0_23_11_API
 ctests += pkcs11-import-url-privkey-caps
@@ -498,16 +521,27 @@ pathbuf_CPPFLAGS = $(AM_CPPFLAGS) \
 	-I$(top_srcdir)/gl	\
 	-I$(top_builddir)/gl
 
+mini_dtls_fragments_CPPFLAGS = $(AM_CPPFLAGS) \
+	-I$(top_srcdir)/gl	\
+	-I$(top_builddir)/gl
+
 if ENABLE_PKCS11
 if !WINDOWS
 ctests += tls13/post-handshake-with-cert-pkcs11 pkcs11/tls-neg-pkcs11-no-key \
-	global-init-override pkcs11/distrust-after
+	global-init-override pkcs11/distrust-after pkcs11/os-locking-ok pkcs11/long-label \
+	pkcs11/trust-list-fault
 tls13_post_handshake_with_cert_pkcs11_DEPENDENCIES = libpkcs11mock2.la libutils.la
 tls13_post_handshake_with_cert_pkcs11_LDADD = $(LDADD) $(LIBDL)
 pkcs11_tls_neg_pkcs11_no_key_DEPENDENCIES = libpkcs11mock2.la libutils.la
 pkcs11_tls_neg_pkcs11_no_key_LDADD = $(LDADD) $(LIBDL)
 pkcs11_distrust_after_DEPENDENCIES = libpkcs11mock3.la libutils.la
 pkcs11_distrust_after_LDADD = $(LDADD) $(LIBDL)
+pkcs11_os_locking_ok_DEPENDENCIES = libpkcs11mock4.la libutils.la
+pkcs11_os_locking_ok_LDADD = $(LDADD) $(LIBDL)
+pkcs11_long_label_DEPENDENCIES = libpkcs11mock4.la libutils.la
+pkcs11_long_label_LDADD = $(LDADD) $(LIBDL)
+pkcs11_trust_fault_DEPENDENCIES = libpkcs11mock5.la libutils.la
+pkcs11_trust_fault_LDADD = $(LDADD) $(LIBDL)
 endif
 endif
 
@@ -517,18 +551,22 @@ if ENABLE_TPM2
 dist_check_SCRIPTS += tpm2.sh
 endif
 
-if ENABLE_KTLS
-indirect_tests += gnutls_ktls
-dist_check_SCRIPTS += ktls.sh
-indirect_tests += ktls_keyupdate
-dist_check_SCRIPTS += ktls_keyupdate.sh
-endif
 
 if !WINDOWS
 
 #
 # List of tests not available/functional under windows
 #
+
+if ENABLE_KTLS
+indirect_tests += gnutls_ktls
+dist_check_SCRIPTS += ktls.sh
+
+indirect_tests += ktls_keyupdate
+ktls_keyupdate_SOURCES = tls13/key_update.c
+ktls_keyupdate_CFLAGS = -DUSE_KTLS
+dist_check_SCRIPTS += ktls_keyupdate.sh
+endif
 
 dist_check_SCRIPTS += dtls/dtls.sh dtls/dtls-resume.sh #dtls/dtls-nb
 
@@ -546,7 +584,15 @@ dist_check_SCRIPTS += fastopen.sh pkgconfig.sh starttls.sh starttls-ftp.sh start
 	sni-resume.sh ocsp-tests/ocsptool.sh cert-reencoding.sh pkcs7-cat.sh long-crl.sh \
 	serv-udp.sh logfile-option.sh gnutls-cli-resume.sh profile-tests.sh \
 	server-weak-keys.sh ocsp-tests/ocsp-signer-verify.sh cfg-test.sh \
-	sanity-lib.sh
+	gnutls-cli-earlydata.sh
+
+if ENABLE_TPM2
+if TPM2_ENABLE_DLOPEN
+dist_check_SCRIPTS += sanity-lib.sh
+endif
+else
+dist_check_SCRIPTS += sanity-lib.sh
+endif
 
 if !DISABLE_SYSTEM_CONFIG
 dist_check_SCRIPTS += system-override-sig.sh system-override-hash.sh \
@@ -564,10 +610,29 @@ dist_check_SCRIPTS += system-override-sig-allowlist.sh \
 indirect_tests += system-override-curves-allowlist
 indirect_tests += protocol-set-allowlist
 
+dist_check_SCRIPTS += system-override-compress-cert.sh
+indirect_tests += compress-cert-conf
+compress_cert_conf_SOURCES = tls13/compress-cert-conf.c
+compress_cert_conf_LDADD = $(LDADD)
+
 dist_check_SCRIPTS += system-override-allow-rsa-pkcs1-encrypt.sh
 indirect_tests += rsaes-pkcs1-v1_5
 rsaes_pkcs1_v1_5_SOURCES = rsaes-pkcs1-v1_5.c
 rsaes_pkcs1_v1_5_LDADD = $(COMMON_GNUTLS_LDADD)
+
+dist_check_SCRIPTS += pkcs11-provider/test-pkcs11-provider.sh
+indirect_tests += pkcs11-provider/pkcs11-provider-pk \
+		  pkcs11-provider/pkcs11-provider-sig \
+		  pkcs11-provider/pkcs11-provider-cipher \
+		  pkcs11-provider/pkcs11-provider-hmac
+pkcs11_provider_pkcs11_provider_pk_SOURCES = pkcs11-provider/pkcs11-provider-pk.c
+pkcs11_provider_pkcs11_provider_sig_SOURCES = pkcs11-provider/pkcs11-provider-sig.c
+pkcs11_provider_pkcs11_provider_cipher_SOURCES = pkcs11-provider/pkcs11-provider-cipher.c
+pkcs11_provider_pkcs11_provider_hmac_SOURCES = pkcs11-provider/pkcs11-provider-hmac.c
+pkcs11_provider_pkcs11_provider_pk_LDADD = $(LDADD)
+pkcs11_provider_pkcs11_provider_sig_LDADD = $(LDADD)
+pkcs11_provider_pkcs11_provider_cipher_LDADD = $(LDADD)
+pkcs11_provider_pkcs11_provider_hmac_LDADD = $(LDADD)
 endif
 
 dist_check_SCRIPTS += gnutls-cli-self-signed.sh gnutls-cli-invalid-crl.sh gnutls-cli-rawpk.sh
@@ -603,9 +668,7 @@ ctests += win32-certopenstore
 
 endif
 
-if ENABLE_LIBOQS
 dist_check_SCRIPTS += pqc-hybrid-kx.sh
-endif
 
 cpptests =
 if ENABLE_CXX
@@ -632,6 +695,8 @@ TESTS_ENVIRONMENT +=						\
 	P11MOCKLIB1=$(abs_builddir)/.libs/libpkcs11mock1.so	\
 	P11MOCKLIB2=$(abs_builddir)/.libs/libpkcs11mock2.so	\
 	P11MOCKLIB3=$(abs_builddir)/.libs/libpkcs11mock3.so	\
+	P11MOCKLIB4=$(abs_builddir)/.libs/libpkcs11mock4.so	\
+	P11MOCKLIB5=$(abs_builddir)/.libs/libpkcs11mock5.so	\
 	PKCS12_MANY_CERTS_FILE=$(srcdir)/cert-tests/data/pkcs12_5certs.p12	\
 	PKCS12FILE=$(srcdir)/cert-tests/data/client.p12		\
 	PKCS12PASSWORD=foobar					\
@@ -672,7 +737,7 @@ endif
 TESTS_ENVIRONMENT +=					\
 	FAKETIME="$(FAKETIME)"				\
 	FAKETIME_F_OPT="$(FAKETIME_F_OPT)"		\
-	ac_cv_faketime_works="$(ac_cv_faketime_works)"
+	gnutls_cv_prog_faketime_works="$(gnutls_cv_prog_faketime_works)"
 
 TEST_EXTENSIONS = .sh
 SH_LOG_COMPILER = $(SHELL)

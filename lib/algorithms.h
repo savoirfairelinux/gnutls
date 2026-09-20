@@ -52,8 +52,29 @@
 #define IS_ECDHX(x) \
 	(((x) == GNUTLS_PK_ECDH_X25519) || ((x) == GNUTLS_PK_ECDH_X448))
 
-#define IS_KEM(x) \
-	(((x) == GNUTLS_PK_MLKEM768) || ((x) == GNUTLS_PK_EXP_KYBER768))
+#define IS_KEM(x)                                                       \
+	(((x) == GNUTLS_PK_MLKEM768) || ((x) == GNUTLS_PK_MLKEM1024) || \
+	 ((x) == GNUTLS_PK_EXP_KYBER768))
+
+#define IS_ML_DSA(x)                                                 \
+	(((x) == GNUTLS_PK_MLDSA44) || ((x) == GNUTLS_PK_MLDSA65) || \
+	 ((x) == GNUTLS_PK_MLDSA87))
+
+#define MLKEM768_PUBKEY_SIZE 1184
+#define MLKEM768_CIPHERTEXT_SIZE 1088
+
+#define MLKEM1024_PUBKEY_SIZE 1568
+#define MLKEM1024_CIPHERTEXT_SIZE 1568
+
+#define MLDSA44_PUBKEY_SIZE 1312
+#define MLDSA65_PUBKEY_SIZE 1952
+#define MLDSA87_PUBKEY_SIZE 2592
+
+#define MLDSA44_PRIVKEY_SIZE 2560
+#define MLDSA65_PRIVKEY_SIZE 4032
+#define MLDSA87_PRIVKEY_SIZE 4896
+
+#define IS_GROUP_HYBRID(group) ((group)->ids[0] != GNUTLS_GROUP_INVALID)
 
 #define SIG_SEM_PRE_TLS12 (1 << 1)
 #define SIG_SEM_TLS13 (1 << 2)
@@ -183,7 +204,8 @@ inline static int _gnutls_mac_get_key_size(const mac_entry_st *e)
 inline static gnutls_digest_algorithm_t
 _gnutls_mac_to_dig(gnutls_mac_algorithm_t mac)
 {
-	if (unlikely(mac >= GNUTLS_MAC_AEAD))
+	if (mac >= GNUTLS_MAC_AEAD && mac != GNUTLS_MAC_SHAKE_128 &&
+	    mac != GNUTLS_MAC_SHAKE_256)
 		return GNUTLS_DIG_UNKNOWN;
 
 	return (gnutls_digest_algorithm_t)mac;
@@ -492,6 +514,10 @@ gnutls_group_t _gnutls_ecc_curve_get_group(gnutls_ecc_curve_t);
 const gnutls_group_entry_st *_gnutls_tls_id_to_group(unsigned num);
 const gnutls_group_entry_st *_gnutls_id_to_group(unsigned id);
 gnutls_group_t _gnutls_group_get_id(const char *name);
+
+int _gnutls_group_expand(
+	const gnutls_group_entry_st *group,
+	const gnutls_group_entry_st *subgroups[MAX_HYBRID_GROUPS + 1]);
 
 gnutls_ecc_curve_t _gnutls_ecc_bits_to_curve(gnutls_pk_algorithm_t pk,
 					     int bits);

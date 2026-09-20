@@ -185,7 +185,7 @@ static int append_status_request(void *_ctx, gnutls_buffer_st *buf)
 		if (ctx->cert_index < session->internals.selected_ocsp_length) {
 			if ((session->internals.selected_ocsp[ctx->cert_index]
 					     .exptime != 0 &&
-			     gnutls_time(0) >=
+			     gnutls_time(NULL) >=
 				     session->internals
 					     .selected_ocsp[ctx->cert_index]
 					     .exptime) ||
@@ -217,7 +217,7 @@ static int append_status_request(void *_ctx, gnutls_buffer_st *buf)
 	} else
 		return 0;
 
-	if (ret == GNUTLS_E_NO_CERTIFICATE_STATUS || resp.data == 0) {
+	if (ret == GNUTLS_E_NO_CERTIFICATE_STATUS || resp.data == NULL) {
 		return 0;
 	} else if (ret < 0) {
 		return gnutls_assert_val(ret);
@@ -676,7 +676,7 @@ static int decompress_certificate(gnutls_session_t session,
 		return gnutls_assert_val(GNUTLS_E_UNEXPECTED_PACKET_LENGTH);
 
 	ret = _gnutls_buffer_pop_datum_prefix24(buf, &comp);
-	if (ret < 0 || buf->length > 0)
+	if (ret < 0 || buf->length > 0 || comp.size == 0)
 		return gnutls_assert_val(GNUTLS_E_UNEXPECTED_PACKET_LENGTH);
 
 	plain.data = gnutls_malloc(plain_exp_len);

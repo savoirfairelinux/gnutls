@@ -208,6 +208,11 @@ static gnutls_x509_privkey_t generate_private_key_int(common_info_st *cinfo)
 		if (ecc_bits < 256)
 			fprintf(stderr,
 				"Note that ECDSA keys with size less than 256 are not widely supported.\n\n");
+	} else if (key_type == GNUTLS_PK_MLDSA44 ||
+		   key_type == GNUTLS_PK_MLDSA65 ||
+		   key_type == GNUTLS_PK_MLDSA87) {
+		fprintf(stdlog, "Generating an %s private key...\n",
+			gnutls_pk_algorithm_get_name(key_type));
 	} else {
 		fprintf(stdlog, "Generating a %d bit %s private key...\n", bits,
 			gnutls_pk_algorithm_get_name(key_type));
@@ -1380,6 +1385,9 @@ static void cmd_parser(int argc, char **argv)
 		cinfo.seed_size = seed.size;
 	}
 
+	if (HAVE_OPT(KEY_FORMAT))
+		cinfo.pkcs8_flags |= figure_key_format(OPT_ARG(KEY_FORMAT));
+
 	if (HAVE_OPT(LABEL)) {
 		gnutls_datum_t hex;
 
@@ -2195,7 +2203,7 @@ static int detailed_verification(gnutls_x509_crt_t cert,
 	ret = gnutls_x509_crt_get_dn3(cert, &name, 0);
 	if (ret < 0) {
 		if (ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
-			name.data = 0;
+			name.data = NULL;
 			name.size = 0;
 		} else {
 			fprintf(stderr, "gnutls_x509_crt_get_dn: %s\n",
@@ -2237,6 +2245,10 @@ static int detailed_verification(gnutls_x509_crt_t cert,
 		ret = gnutls_x509_crl_get_number(crl, tmp, &tmp_size, NULL);
 		if (ret < 0) {
 			serial.data = (void *)gnutls_strdup("unnumbered");
+			if (serial.data == NULL) {
+				fprintf(stderr, "out of memory\n");
+				app_exit(1);
+			}
 		} else {
 			data.data = (void *)tmp;
 			data.size = tmp_size;
@@ -2940,6 +2952,7 @@ void generate_pkcs8(common_info_st *cinfo)
 	password = get_password(cinfo, &flags, 1);
 
 	flags |= cipher_to_flags(cinfo->pkcs_cipher);
+	flags |= cinfo->pkcs8_flags;
 
 	size = lbuffer_size;
 	result = gnutls_x509_privkey_export_pkcs8(key, outcert_format, password,
@@ -3013,6 +3026,7 @@ void generate_pkcs12(common_info_st *cinfo)
 
 	pass = get_password(cinfo, &flags, 1);
 	flags |= cipher_to_flags(cinfo->pkcs_cipher);
+	flags |= cinfo->pkcs8_flags;
 
 	for (i = 0; i < ncrts; i++) {
 		gnutls_pkcs12_bag_t bag;
@@ -3829,9 +3843,9 @@ static gnutls_pubkey_t find_pubkey(gnutls_x509_crt_t crt, common_info_st *cinfo)
 				}
 
 				if (memmem(pem.data, pem.size,
-					   "BEGIN CERTIFICATE", 16) != 0 ||
+					   "BEGIN CERTIFICATE", 16) != NULL ||
 				    memmem(pem.data, pem.size, "BEGIN X509",
-					   10) != 0) {
+					   10) != NULL) {
 					ret = gnutls_x509_crt_init(&crt);
 					if (ret < 0) {
 						fprintf(stderr,
@@ -3881,7 +3895,7 @@ void pubkey_info(gnutls_x509_crt_t crt, common_info_st *cinfo)
 	gnutls_pubkey_t pubkey;
 
 	pubkey = find_pubkey(crt, cinfo);
-	if (pubkey == 0) {
+	if (pubkey == NULL) {
 		fprintf(stderr, "find public key error\n");
 		app_exit(1);
 	}
@@ -3902,7 +3916,7 @@ static void pubkey_keyid(common_info_st *cinfo)
 	unsigned flags;
 
 	pubkey = find_pubkey(NULL, cinfo);
-	if (pubkey == 0) {
+	if (pubkey == NULL) {
 		fprintf(stderr, "find public key error\n");
 		app_exit(1);
 	}

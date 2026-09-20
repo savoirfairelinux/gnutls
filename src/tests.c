@@ -287,6 +287,9 @@ test_code_t test_vko_gost_12(gnutls_session_t session)
 	if (tls_ext_ok == 0)
 		return TEST_IGNORE;
 
+	if (gnutls_fips140_mode_enabled())
+		return TEST_IGNORE;
+
 	sprintf(prio_str,
 		INIT_STR ALL_CIPHERS ":" ALL_COMP ":%s:" ALL_MACS
 				     ":+VKO-GOST-12:%s",
@@ -375,6 +378,9 @@ test_code_t test_ecdhe_secp521r1(gnutls_session_t session)
 
 test_code_t test_ecdhe_x25519(gnutls_session_t session)
 {
+	if (gnutls_fips140_mode_enabled())
+		return TEST_IGNORE;
+
 	return test_ecdhe_curve(session, "+CURVE-X25519",
 				GNUTLS_ECC_CURVE_X25519);
 }
@@ -1626,7 +1632,7 @@ test_code_t test_chain_order(gnutls_session_t session)
 	if (cert_list_size == 1)
 		return TEST_SUCCEED;
 
-	p = 0;
+	p = NULL;
 	p_size = 0;
 	pos = NULL;
 	for (i = 0; i < cert_list_size; i++) {
@@ -1764,7 +1770,9 @@ static test_code_t test_do_handshake_and_send_record(gnutls_session_t session)
 		return ret;
 
 	gnutls_record_send(session, snd_buf, sizeof(snd_buf) - 1);
-	ret = gnutls_record_recv(session, buf, sizeof(buf) - 1);
+	do {
+		ret = gnutls_record_recv(session, buf, sizeof(buf) - 1);
+	} while (ret == GNUTLS_E_INTERRUPTED || ret == GNUTLS_E_AGAIN);
 	if (ret < 0)
 		return TEST_FAILED;
 

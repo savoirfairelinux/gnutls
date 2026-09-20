@@ -1450,6 +1450,36 @@ GNUTLS_3_8_6
 	*;
 } GNUTLS_3_8_4;
 
+GNUTLS_3_8_11
+{
+ global:
+	gnutls_psk_allocate_client_credentials2;
+	gnutls_psk_allocate_server_credentials2;
+	gnutls_record_get_max_send_size;
+	gnutls_handshake_update_receiving_key;
+	gnutls_audit_push_context;
+	gnutls_audit_pop_context;
+	gnutls_audit_current_context;
+ local:
+	*;
+} GNUTLS_3_8_6;
+
+GNUTLS_3_8_13
+{
+ global:
+    gnutls_pkcs11_obj_get_pk_algorithm;
+    gnutls_hpke_encap;
+    gnutls_hpke_decap;
+    gnutls_hpke_init;
+    gnutls_hpke_deinit;
+    gnutls_hpke_seal;
+    gnutls_hpke_open;
+    gnutls_hpke_derive_keypair;
+    gnutls_hpke_export;
+ local:
+	*;
+} GNUTLS_3_8_11;
+
 GNUTLS_FIPS140_3_4 {
   global:
 	gnutls_cipher_self_test;
@@ -1560,4 +1590,11 @@ GNUTLS_PRIVATE_3_4 {
 	_gnutls_pathbuf_append;
 	_gnutls_pathbuf_truncate;
 	_gnutls_pathbuf_deinit;
+	# needed by tests/pkcs11/eddsa-ecpoint-encodings
+	_gnutls_pubkey_import_ecc_eddsa;
+	# needed by tests/hpke-tests
+        _gnutls_hpke_get_seq;
+	_gnutls_hpke_set_ikme;
+	# needed by tests/pkcs7-pad
+	_gnutls_pkcs7_unpad;
 } GNUTLS_3_4;

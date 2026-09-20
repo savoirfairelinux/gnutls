@@ -178,7 +178,7 @@ static int _gnutls_gen_rsa_psk_client_kx(gnutls_session_t session,
 
 	/* Encrypt premaster secret */
 	if ((ret = _gnutls_pk_encrypt(GNUTLS_PK_RSA, &sdata, &premaster_secret,
-				      &params)) < 0) {
+				      &params, &params.spki)) < 0) {
 		gnutls_assert();
 		return ret;
 	}
@@ -234,9 +234,9 @@ static int _gnutls_gen_rsa_psk_client_kx(gnutls_session_t session,
 
 cleanup:
 	_gnutls_free_datum(&sdata);
-	_gnutls_free_temp_key_datum(&premaster_secret);
+	_gnutls_free_key_datum(&premaster_secret);
 	if (free) {
-		_gnutls_free_temp_key_datum(&key);
+		_gnutls_free_key_datum(&key);
 		gnutls_free(username.data);
 	}
 
@@ -257,6 +257,7 @@ static int _gnutls_proc_rsa_psk_client_kx(gnutls_session_t session,
 	ssize_t data_size = _data_size;
 	gnutls_psk_server_credentials_t cred;
 	volatile uint8_t ver_maj, ver_min;
+	unsigned int rsa_key_bits;
 
 	cred = (gnutls_psk_server_credentials_t)_gnutls_get_cred(
 		session, GNUTLS_CRD_PSK);
@@ -313,6 +314,10 @@ static int _gnutls_proc_rsa_psk_client_kx(gnutls_session_t session,
 		return GNUTLS_E_UNEXPECTED_PACKET_LENGTH;
 	}
 	ciphertext.size = dsize;
+	gnutls_privkey_get_pk_algorithm(session->internals.selected_key,
+					&rsa_key_bits);
+	if (ciphertext.size != (rsa_key_bits + 7) / 8)
+		return gnutls_assert_val(GNUTLS_E_DECRYPTION_FAILED);
 
 	ver_maj = _gnutls_get_adv_version_major(session);
 	ver_min = _gnutls_get_adv_version_minor(session);
@@ -321,8 +326,7 @@ static int _gnutls_proc_rsa_psk_client_kx(gnutls_session_t session,
 	 * filled in if the key is not found.
 	 */
 	ret = _gnutls_psk_pwd_find_entry(session, info->username,
-					 strlen(info->username), &pwd_psk,
-					 NULL);
+					 info->username_len, &pwd_psk, NULL);
 	if (ret < 0)
 		return gnutls_assert_val(ret);
 

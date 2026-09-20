@@ -973,6 +973,10 @@ static int unpack_security_parameters(gnutls_session_t session,
 		&session->internals.resumed_security_parameters.session_id_size,
 		1);
 
+	if (session->internals.resumed_security_parameters.session_id_size >
+	    GNUTLS_MAX_SESSION_ID_SIZE)
+		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+
 	BUFFER_POP(
 		ps, session->internals.resumed_security_parameters.session_id,
 		session->internals.resumed_security_parameters.session_id_size);
@@ -1156,9 +1160,9 @@ int gnutls_session_set_premaster(gnutls_session_t session, unsigned int entity,
 			.max_record_recv_size = DEFAULT_MAX_RECORD_SIZE;
 
 	session->internals.resumed_security_parameters.timestamp =
-		gnutls_time(0);
+		gnutls_time(NULL);
 
-	session->internals.resumed_security_parameters.grp = 0;
+	session->internals.resumed_security_parameters.grp = NULL;
 
 	session->internals.resumed_security_parameters.post_handshake_auth = 0;
 

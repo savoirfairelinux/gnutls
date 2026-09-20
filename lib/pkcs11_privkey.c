@@ -401,6 +401,12 @@ retry_login:
 	}
 
 	tmp.data = gnutls_malloc(siglen);
+	if (tmp.data == NULL) {
+		gnutls_assert();
+		ret = GNUTLS_E_MEMORY_ERROR;
+		goto cleanup;
+	}
+
 	tmp.size = siglen;
 
 	rv = pkcs11_sign(sinfo->module, sinfo->pks, hash->data, hash->size,
@@ -757,6 +763,12 @@ retry_login:
 	}
 
 	plaintext->data = gnutls_malloc(siglen);
+	if (plaintext->data == NULL) {
+		gnutls_assert();
+		ret = GNUTLS_E_MEMORY_ERROR;
+		goto cleanup;
+	}
+
 	plaintext->size = siglen;
 
 	rv = pkcs11_decrypt(key->sinfo.module, key->sinfo.pks, ciphertext->data,
@@ -826,7 +838,7 @@ int _gnutls_pkcs11_privkey_decrypt_data2(gnutls_pkcs11_privkey_t key,
 	if (ret != 0)
 		return gnutls_assert_val(GNUTLS_E_LOCKING_ERROR);
 
-	buffer = gnutls_malloc(siglen);
+	buffer = gnutls_malloc(MAX((size_t)siglen, plaintext_size));
 	if (!buffer) {
 		gnutls_assert();
 		return GNUTLS_E_MEMORY_ERROR;
@@ -1458,7 +1470,7 @@ int _pkcs11_privkey_get_pubkey(gnutls_pkcs11_privkey_t pkey,
 		goto cleanup;
 	}
 
-	obj->pk_algorithm = gnutls_pkcs11_privkey_get_pk_algorithm(pkey, 0);
+	obj->pk_algorithm = gnutls_pkcs11_privkey_get_pk_algorithm(pkey, NULL);
 	obj->type = GNUTLS_PKCS11_OBJ_PUBKEY;
 	pk_to_genmech(obj->pk_algorithm, &key_type);
 

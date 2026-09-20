@@ -104,8 +104,10 @@ static int parser_getc(struct parser_st *parser)
 	if (parser->pushback_length > 0) {
 		return parser->pushback[--parser->pushback_length];
 	}
-	int c = getc(parser->fp);
-	return c;
+	if (feof(parser->fp) || ferror(parser->fp)) {
+		return EOF;
+	}
+	return getc(parser->fp);
 }
 
 static void parser_ungetc(struct parser_st *parser, int c)
@@ -368,9 +370,11 @@ static int take_option(struct options_st *options, struct cfg_option_st *option)
 
 static void clear_options(struct options_st *options)
 {
-	for (size_t i = 0; options->length; i++) {
+	for (size_t i = 0; i < options->length; i++) {
 		clear_option(&options->data[i]);
 	}
+	free(options->data);
+	memset(options, 0, sizeof(struct options_st));
 }
 
 cfg_option_t cfg_load(const char *filename)

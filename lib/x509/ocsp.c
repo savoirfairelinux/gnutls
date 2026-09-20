@@ -2132,7 +2132,8 @@ static int check_ocsp_purpose(gnutls_x509_crt_t signercert)
 			return gnutls_assert_val(rc);
 		}
 
-		if (memcmp(oidtmp, GNUTLS_KP_OCSP_SIGNING, oidsize) != 0) {
+		if (oidsize != sizeof(GNUTLS_KP_OCSP_SIGNING) - 1 ||
+		    memcmp(oidtmp, GNUTLS_KP_OCSP_SIGNING, oidsize) != 0) {
 			gnutls_assert();
 			continue;
 		}
@@ -2466,6 +2467,7 @@ int gnutls_ocsp_resp_list_import2(gnutls_ocsp_resp_t **ocsps,
 	goto cleanup;
 
 fail:
+	assert((*size == 0 && *ocsps == NULL) || (*size > 0 && *ocsps != NULL));
 	for (i = 0; i < *size; i++) {
 		gnutls_ocsp_resp_deinit((*ocsps)[i]);
 	}
@@ -2505,7 +2507,7 @@ time_t _gnutls_ocsp_get_validity(gnutls_ocsp_resp_const_t resp)
 		return gnutls_assert_val(-1);
 	}
 
-	now = gnutls_time(0);
+	now = gnutls_time(NULL);
 
 	if (ntime == -1) {
 		/* This is a problematic case, and there is no consensus on how

@@ -228,7 +228,7 @@ int gnutls_x509_cidr_to_rfc5280(const char *cidr, gnutls_datum_t *cidr_rfc5280)
 {
 	unsigned iplength, prefix;
 	int ret;
-	char *p;
+	const char *p;
 	char *p_end = NULL;
 	char *cidr_tmp;
 
@@ -254,7 +254,7 @@ int gnutls_x509_cidr_to_rfc5280(const char *cidr, gnutls_datum_t *cidr_rfc5280)
 		return GNUTLS_E_MALFORMED_CIDR;
 	}
 
-	if (strchr(cidr, ':') != 0) { /* IPv6 */
+	if (strchr(cidr, ':') != NULL) { /* IPv6 */
 		iplength = 16;
 	} else { /* IPv4 */
 		iplength = 4;

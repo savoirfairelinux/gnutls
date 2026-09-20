@@ -150,6 +150,8 @@ typedef int ssize_t;
  * supported groups/curves is not present */
 #define DEFAULT_EC_GROUP GNUTLS_GROUP_SECP256R1
 
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+
 typedef enum transport_t {
 	GNUTLS_STREAM,
 	GNUTLS_DGRAM
@@ -417,27 +419,6 @@ typedef enum extensions_t {
 #define GNUTLS_EXTENSION_MAX_VALUE 63
 #define ext_track_t uint64_t
 
-#include <verify.h>
-
-verify(GNUTLS_EXTENSION_MAX < GNUTLS_EXTENSION_MAX_VALUE);
-verify(GNUTLS_EXTENSION_MAX < MAX_EXT_TYPES);
-
-/* we must provide at least 16 extensions for users to register;
- * increase GNUTLS_EXTENSION_MAX_VALUE, MAX_EXT_TYPES and used_exts
- * type if this fails
- */
-verify(GNUTLS_EXTENSION_MAX_VALUE - GNUTLS_EXTENSION_MAX >= 16);
-
-/* MAX_EXT_TYPES must fit in a single byte, to generate random
- * permutation at once.
- */
-verify(MAX_EXT_TYPES <= UINT8_MAX);
-
-/* The 'verify' symbol from <verify.h> is used extensively in the
- * code; undef it to avoid clash
- */
-#undef verify
-
 typedef enum {
 	CIPHER_STREAM,
 	CIPHER_BLOCK,
@@ -479,10 +460,10 @@ typedef struct {
 	uint16_t sequence;
 
 	/* indicate whether that message is complete.
-	 * complete means start_offset == 0 and end_offset == length
+	 * complete means start_offset == 0 and frag_length == length
 	 */
 	uint32_t start_offset;
-	uint32_t end_offset;
+	uint32_t frag_length; /* used exclusively in DTLS reassembly */
 
 	uint8_t header[MAX_HANDSHAKE_HEADER_SIZE];
 	int header_size;
@@ -756,6 +737,8 @@ typedef struct gnutls_cipher_suite_entry_st {
 	gnutls_mac_algorithm_t prf;
 } gnutls_cipher_suite_entry_st;
 
+#define MAX_HYBRID_GROUPS 2
+
 typedef struct gnutls_group_entry_st {
 	const char *name;
 	gnutls_group_t id;
@@ -765,8 +748,14 @@ typedef struct gnutls_group_entry_st {
 	const unsigned *q_bits;
 	gnutls_ecc_curve_t curve;
 	gnutls_pk_algorithm_t pk;
+	size_t pubkey_size; /* for KEM based groups */
+	size_t ciphertext_size; /* for KEM based groups */
+	gnutls_group_t ids[MAX_HYBRID_GROUPS + 1]; /* IDs of subgroups
+						    * comprising a
+						    * hybrid group,
+						    * terminated with
+						    * GNUTLS_GROUP_INVALID */
 	unsigned tls_id; /* The RFC4492 namedCurve ID or TLS 1.3 group ID */
-	const struct gnutls_group_entry_st *next;
 } gnutls_group_entry_st;
 
 #define GNUTLS_MAC_FLAG_PREIMAGE_INSECURE \
@@ -867,9 +856,6 @@ typedef struct {
 
 	/* The epoch that the next handshake will initialize. */
 	uint16_t epoch_next;
-
-	/* The epoch at index 0 of record_parameters. */
-	uint16_t epoch_min;
 
 	/* this is the ciphersuite we are going to use
 	 * moved here from internals in order to be restored
@@ -1658,12 +1644,16 @@ typedef struct {
 	/* Compression method for certificate compression */
 	gnutls_compression_method_t compress_certificate_method;
 
+	/* To shuffle extension sending order */
+	extensions_t client_hello_exts[MAX_EXT_TYPES];
+	bool client_hello_exts_set;
+
 	/* If you add anything here, check _gnutls_handshake_internal_state_clear().
 	 */
 } internals_st;
 
 /* Maximum number of epochs we keep around. */
-#define MAX_EPOCH_INDEX 4
+#define MAX_EPOCH_INDEX 16
 
 #define reset_cand_groups(session)                                            \
 	session->internals.cand_ec_group = session->internals.cand_dh_group = \
@@ -1798,5 +1788,8 @@ extern unsigned int _gnutls_global_version;
 
 bool _gnutls_config_is_ktls_enabled(void);
 bool _gnutls_config_is_rsa_pkcs1_encrypt_allowed(void);
+int _gnutls_config_set_certificate_compression_methods(gnutls_session_t session);
+const char *_gnutls_config_get_p11_provider_url(void);
+const char *_gnutls_config_get_p11_provider_pin(void);
 
 #endif /* GNUTLS_LIB_GNUTLS_INT_H */

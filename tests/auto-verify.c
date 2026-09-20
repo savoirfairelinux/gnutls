@@ -235,7 +235,7 @@ static int cert_out_callback(gnutls_x509_crt_t cert, gnutls_x509_crt_t issuer,
 	ret = gnutls_x509_crt_get_dn3(cert, &name, 0);
 	if (ret < 0) {
 		if (ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
-			name.data = 0;
+			name.data = NULL;
 			name.size = 0;
 		} else {
 			fprintf(stderr, "gnutls_x509_crt_get_dn: %s\n",
@@ -276,6 +276,7 @@ static int cert_out_callback(gnutls_x509_crt_t cert, gnutls_x509_crt_t issuer,
 		ret = gnutls_x509_crl_get_number(crl, tmp, &tmp_size, NULL);
 		if (ret < 0) {
 			serial.data = (void *)gnutls_strdup("unnumbered");
+			assert(serial.data != NULL);
 		} else {
 			data.data = (void *)tmp;
 			data.size = tmp_size;
