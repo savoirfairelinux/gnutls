@@ -2,6 +2,12 @@
 #ifndef _SMP_STDALIGN_H
 #define _SMP_STDALIGN_H
 
+#if defined(_MSC_VER)
+# ifndef __builtin_alignof
+#  define __builtin_alignof(t) __alignof(t)
+# endif
+#endif
+
 #if !defined(__cplusplus)
 # ifndef alignas
 #  define alignas(a) __declspec(align(a))
