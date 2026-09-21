@@ -2215,6 +2215,14 @@ _GL_UNUSED_LABEL should be used with a trailing ;*/
 #define _Thread_local __declspec(thread)
 #endif
 #define CRAU_MAYBE_UNUSED /* empty */
+#if !defined(__cplusplus)
+# ifndef alignas
+#  define alignas(a) __declspec(align(a))
+# endif
+# ifndef alignof
+#  define alignof(t) __alignof(t)
+# endif
+#endif
 #endif
 
 #ifndef O_ACCMODE
