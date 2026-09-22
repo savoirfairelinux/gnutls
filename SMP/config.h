@@ -1,13 +1,13 @@
 #if defined(_MSC_VER)
 # ifndef __builtin_alignof
-#  define __builtin_alignof(t) __alignof(t)
+#  define __builtin_alignof(t) 8
+# endif
+# ifndef alignof
+#  define alignof(t) 8
 # endif
 # if !defined(__cplusplus)
 #  ifndef alignas
-#   define alignas(a) __declspec(align(a))
-#  endif
-#  ifndef alignof
-#   define alignof(t) __alignof(t)
+#   define alignas(a) __declspec(align(16))
 #  endif
 #  ifndef _INC_STDALIGN
 #   define _INC_STDALIGN
@@ -2244,26 +2244,7 @@ _GL_UNUSED_LABEL should be used with a trailing ;*/
 #define _Thread_local __declspec(thread)
 #endif
 #define CRAU_MAYBE_UNUSED /* empty */
-#if !defined(__cplusplus)
-# ifndef alignas
-#  define alignas(a) __declspec(align(a))
-# endif
-# ifndef alignof
-#  define alignof(t) __alignof(t)
-# endif
-# ifndef _INC_STDALIGN
-#  define _INC_STDALIGN
-# endif
-# ifndef __STDALIGN_H
-#  define __STDALIGN_H
-# endif
-# ifndef __alignas_is_defined
-#  define __alignas_is_defined 1
-# endif
-# ifndef __alignof_is_defined
-#  define __alignof_is_defined 1
-# endif
-#endif
+/* alignas/alignof defined at top of config.h */
 #endif
 
 #ifndef O_ACCMODE
